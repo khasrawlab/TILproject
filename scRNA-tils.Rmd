@@ -1,0 +1,3540 @@
+---
+title: "scRNA-tils"
+author: "elizabeth owens"
+date: "2025-01-23"
+output: html_document
+---
+
+#load R packages
+```{r setup, include=FALSE}
+library(sp)
+library(SeuratObject)
+library(gridExtra)
+library(Seurat)
+library(Matrix)
+library(dplyr)
+library(ggplot2)
+library(edgeR)
+library(SingleR)
+
+library(scRNAseq)
+library(scater)
+library(scran)
+library(Glimma)
+library(edgeR)
+
+library(speckle)
+library(limma)
+library(ggplot2)
+library(devtools)
+library(clustree)
+
+devtools::install_github("ebbertd/chisq.posthoc.test")
+library(chisq.posthoc.test)
+install.packages("ggsignif")
+library(ggsignif)
+library(anndata)
+
+```
+
+## import sequencing data 
+
+
+```{r cars}
+#sample 23-0227 [BC001]- 
+til1.data <- Read10X(data.dir="/data/khasrawlab/elo8/merged-tils/merged-23-0227/outs/count/filtered_feature_bc_matrix")
+til1 <- CreateSeuratObject(til1.data,project="23-0227" )
+til1 #1004 cells
+
+#sample 23-0258 [BC003]-sus
+til3.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0258/outs/count/filtered_feature_bc_matrix/") 
+til3 <- CreateSeuratObject(counts=til3.data, project= "23-0258")
+til3 #830 cells
+
+
+
+#sample 23-0021[BC005]0-sus
+til5.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0021/outs/count/filtered_feature_bc_matrix/") 
+til5 <- CreateSeuratObject(counts=til5.data, project= "23-0021")
+til5 #712 cells
+
+
+#sample 23-0257 [BC007]
+til7.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0257/outs/count/filtered_feature_bc_matrix/") 
+til7 <- CreateSeuratObject(counts=til7.data, project= "23-0257")
+til7 #1429 cells
+
+#sample 23-0264 [BC008]-dud
+til8.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0264/outs/count/filtered_feature_bc_matrix/") 
+til8 <- CreateSeuratObject(counts=til8.data, project= "23-0264")
+til8 #765 cells
+
+#sample 23-0153 [BC009]
+til9.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0153/outs/count/filtered_feature_bc_matrix/") 
+til9 <- CreateSeuratObject(counts=til9.data, project= "23-0153")
+til9 #796 cells
+
+#sample 22-0160 [BC010] -dud
+til10.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-22-0160/outs/count/filtered_feature_bc_matrix/") 
+til10 <- CreateSeuratObject(counts=til10.data, project= "22-0160")
+til10 #539 cells
+
+#sample 23-0217 [BC011] not used anymore
+#til11.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0217/outs/count/filtered_feature_bc_matrix/") 
+#til11 <- CreateSeuratObject(counts=til11.data, project= "23-0217")
+#til11 #627 cells
+
+#sample 22-0189 [BC012]
+til12.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-22-0189/outs/count/filtered_feature_bc_matrix/") 
+til12 <- CreateSeuratObject(counts=til12.data, project= "22-0189")
+til12 #902 cells
+```
+
+
+## Add relevant metadata to seurat objects
+```{r}
+#calculate percentage of mitochondrial genes per cell
+til1[["percent.mt"]] <- PercentageFeatureSet(til1, pattern = "^MT-")
+
+til3[["percent.mt"]] <- PercentageFeatureSet(til3, pattern = "^MT-")
+
+til5[["percent.mt"]] <- PercentageFeatureSet(til5, pattern = "^MT-")
+
+til7[["percent.mt"]] <- PercentageFeatureSet(til7, pattern = "^MT-")
+til8[["percent.mt"]] <- PercentageFeatureSet(til8, pattern = "^MT-")
+til9[["percent.mt"]] <- PercentageFeatureSet(til9, pattern = "^MT-")
+til10[["percent.mt"]] <- PercentageFeatureSet(til10, pattern = "^MT-")
+
+til12[["percent.mt"]] <- PercentageFeatureSet(til12, pattern = "^MT-")
+
+
+#Percentage of Hemoglobin Genes
+til1[["percent.hb"]]<- PercentageFeatureSet(til1, pattern = "^HB[^(P)]")
+
+til3[["percent.hb"]]<- PercentageFeatureSet(til3, pattern = "^HB[^(P)]")
+
+til5[["percent.hb"]]<- PercentageFeatureSet(til5, pattern = "^HB[^(P)]")
+
+til7[["percent.hb"]]<- PercentageFeatureSet(til7, pattern = "^HB[^(P)]")
+til8[["percent.hb"]]<- PercentageFeatureSet(til8, pattern = "^HB[^(P)]")
+til9[["percent.hb"]]<- PercentageFeatureSet(til9, pattern = "^HB[^(P)]")
+til10[["percent.hb"]]<- PercentageFeatureSet(til10, pattern = "^HB[^(P)]")
+
+til12[["percent.hb"]]<- PercentageFeatureSet(til12, pattern = "^HB[^(P)]")
+
+#Add number of genes per cell
+til1[["genesperUMI"]] <- log10(til1$nFeature_RNA) / log10(til1$nCount_RNA)
+
+til3[["genesperUMI"]] <- log10(til3$nFeature_RNA) / log10(til3$nCount_RNA)
+
+til5[["genesperUMI"]] <- log10(til5$nFeature_RNA) / log10(til5$nCount_RNA)
+
+til7[["genesperUMI"]] <- log10(til7$nFeature_RNA) / log10(til7$nCount_RNA)
+til8[["genesperUMI"]] <- log10(til8$nFeature_RNA) / log10(til8$nCount_RNA)
+
+til10[["genesperUMI"]] <- log10(til10$nFeature_RNA) / log10(til10$nCount_RNA)
+til9[["genesperUMI"]] <- log10(til9$nFeature_RNA) / log10(til9$nCount_RNA)
+til12[["genesperUMI"]] <- log10(til12$nFeature_RNA) / log10(til12$nCount_RNA)
+
+#add condition to metadata
+til1$condition <- "TIL with IL2"
+til3$condition <- "no TILs"
+til5$condition <- "no TILs"
+til7$condition <- "TIL with IL2"
+til8$condition <- "no TILs"
+til10$condition <- "no TILs"
+til9$condition <- "TIL with IL2"
+til12$condition <- "TIL with IL2"
+
+
+#add pathology report info
+til1$histology <- "GBM"
+til3$histology <- "GBM"
+til5$histology <- "Glioma G3"
+til7$histology <- "GBM"
+til8$histology <- "Astrocytoma G3"
+til10$histology <- "GBM"
+til9$histology <- "GBM"
+til12$histology <- "GBM"
+
+#ND = newly diagnosed, R = recurrent
+til1$state <- "R"
+til3$state <- "ND"
+til5$state <- "ND"
+til7$state <- "ND"
+til8$state <- "ND"
+til10$state <- "R"
+til9$state <- "ND"
+til12$state <- "ND"
+
+#IDH mutation
+til1$idh.mut <- "WT"
+til3$idh.mut <- "WT"
+til5$idh.mut <- "R132H"
+til7$idh.mut <- "R132H"
+til8$idh.mut <- "R132H"
+til10$idh.mut <- "WT"
+til9$idh.mut <- "WT"
+til12$idh.mut <- "WT"
+
+#tumor location
+til1$location <- "Temporal"
+til3$location <- "L temporal"
+til5$location <- "L frontal"
+til7$location <- "Temporal"
+til8$location <- "R Frontal"
+til10$location <- "R parietal"
+til9$location <- " Temporoparietal"
+til12$location <- "Midline thalamic, L parietooccipital extension"
+
+#patient age
+til1$age = 63
+til3$age = 79
+til5$age = 28
+til7$age = 68
+til8$age = 32
+til10$age = 54
+til9$age = 79
+til12$age = 45
+
+til1$sex <- "M"
+til3$sex <- "M"
+til5$sex <- "F"
+til7$sex <- "F"
+til8$sex <- "F"
+til10$sex <- "M"
+til9$sex <- "F"
+til12$sex <- "M"
+```
+
+##Quality Control Filtering
+  consulted resources: https://hbctraining.github.io/scRNA-seq/lessons/04_SC_quality_control.html#:~:text=UMI%20counts%20%28transcripts%29%20per,between%20500%2D&text=counts%20per%20cell%20should,between%20500%2D&text=500%2C%20that%20is%20the,between%20500%2D&text=what%20we%20expect.%20If,between%20500%2D
+  
+```{r}
+#Violin Plots for QC checks
+#create combined seurat object of relevant metadata to visualize simultaneously
+tils <- merge(til1, y=list(til3,til5, til7, til8, til9, til10, til12), 
+                       add.cell.ids = c("til1", 'til3','til5', 'til7', 'til8', 'til9', 'til10', 'til11'))
+
+
+#create Vnplot of QC Metrics to determine filtering threshold 
+tils.nCountplot <- VlnPlot(tils, features = c("nCount_RNA"), group.by = "orig.ident", pt.size = 0.1) +
+  ggtitle("nCount_RNA  1st filt") 
+tils.nCountplot 
+tils.Featureplot <- VlnPlot(tils, features = c("nFeature_RNA"), group.by = "orig.ident", pt.size = 0.1) +
+  ggtitle("nFeature_RNA 1st filt") 
+tils.Featureplot
+tils.mitoplot <- VlnPlot(tils, features = c("percent.mt"), group.by = "orig.ident", pt.size = 0.1) +
+  ggtitle("percent.mito 1st filt")
+tils.mitoplot
+
+hb.plot.tils <- VlnPlot(tils, features = c("percent.hb"), group.by = "orig.ident", pt.size = 0.1) +  
+  ggtitle("percent.hb 1st filt")
+hb.plot.tils
+genesperumi.plot.tils <- VlnPlot(tils, features=c("genesperUMI"), group.by="orig.ident", pt.size = 0.1) +
+  ggtitle("genesperUMI 1st filt")
+genesperumi.plot.tils
+
+FeatureScatter(tils, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+
+til1 <- subset(til1, subset = nCount_RNA > 200 & nCount_RNA <20000 &  nFeature_RNA > 100 & nFeature_RNA < 7000 & percent.mt < 20 & genesperUMI > 0.8 & percent.hb < 2) 
+til1 <- til1[rowSums(til1@assays$RNA$counts > 0) >= 3, ]
+
+til3 <- subset(til3, subset = nCount_RNA > 200 & nCount_RNA <20000 &  nFeature_RNA > 100 & nFeature_RNA < 7000 & percent.mt < 20 & genesperUMI > 0.8 & percent.hb < 2) 
+til3 <- til3[rowSums(til3@assays$RNA$counts > 0) >= 3, ]
+
+
+til5 <- subset(til5,  subset = nCount_RNA > 200 & nCount_RNA <20000 &  nFeature_RNA > 100 & nFeature_RNA < 7000 & percent.mt < 20 & genesperUMI > 0.8 & percent.hb < 2) 
+til5 <- til5[rowSums(til5@assays$RNA$counts > 0) >= 3, ]
+
+
+til7 <- subset(til7, subset = nCount_RNA > 200 & nCount_RNA <20000 &  nFeature_RNA > 100 & nFeature_RNA < 7000 & percent.mt < 20 & genesperUMI > 0.8 & percent.hb < 2) 
+til7 <- til7[rowSums(til7@assays$RNA$counts > 0) >= 3, ]
+
+
+til8 <- subset(til8, subset = nCount_RNA > 200 & nCount_RNA <20000 &  nFeature_RNA > 100 & nFeature_RNA < 7000 & percent.mt < 20 & genesperUMI > 0.8 & percent.hb < 2) 
+til8 <- til8[rowSums(til8@assays$RNA$counts > 0) >= 3, ]
+
+
+til10 <- subset(til10, subset = nCount_RNA > 200 & nCount_RNA <20000 &  nFeature_RNA > 100 & nFeature_RNA < 7000 & percent.mt < 20 & genesperUMI > 0.8 & percent.hb < 2) 
+til10 <- til10[rowSums(til10@assays$RNA$counts > 0) >= 3, ]
+
+
+til9 <- subset(til9, subset = nCount_RNA > 200 & nCount_RNA <20000 &  nFeature_RNA > 100 & nFeature_RNA < 7000 & percent.mt < 20 & genesperUMI > 0.8 & percent.hb < 2) 
+til9 <- til9[rowSums(til9@assays$RNA$counts > 0) >= 3, ]
+
+
+til12 <- subset(til12,subset = nCount_RNA > 200 & nCount_RNA <20000 &  nFeature_RNA > 100 & nFeature_RNA < 7000 & percent.mt < 20 & genesperUMI > 0.8 & percent.hb < 2 )
+til12 <- til12[rowSums(til12@assays$RNA$counts > 0) >= 3, ]
+
+
+```
+
+##add cell numbers to kbject (to keep track of each cell once data is merged)
+
+```{r}
+til1$ncell <-  paste0("til1.cell", 1:949)
+
+til3$ncell <- paste0("til3.cell", 1:777)
+
+til5$ncell <- paste0("til5.cell", 1:691)
+
+til7$ncell <- paste0("til7.cell", 1:1342)
+til8$ncell <- paste0("til8.cell", 1:730)
+til9$ncell <-  paste0("til9.cell", 1:753)
+til10$ncell <- paste0("til10.cell", 1:472)
+
+til12$ncell <-  paste0("til12.cell", 1:853)
+```
+
+
+
+##Normalize, Find Variable Features, Scale, Batch Correction/Integration
+Seurat's typical scRNA-seq workflow vignette: https://satijalab.org/seurat/archive/v3.1/pbmc3k_tutorial.html
+
+Seurat's Batch Correction/Integration Vignette: https://satijalab.org/seurat/articles/integration_introduction.html#introduction-to-scrna-seq-integration
+
+
+```{r}
+tils <- merge(til1, y=list(til3, til5, til7, til8, til10, til9, til12), 
+              add.cell.ids = c("til1",'til3','til5', 'til7', 'til8', 'til10', 'til9', 'til12'))
+
+#run through typical processing but with all tils in one seurat object
+#normalization, find variable features, scale data & run PCA with a seed set to ensure reproducibility (Seurat functions)
+tils <- NormalizeData(tils)
+tils <- FindVariableFeatures(tils, selection.method = "vst", nfeatures = 5000)
+tils.genes <- rownames(tils)
+tils <- ScaleData(tils, features = tils.genes)
+tils <- RunPCA(tils, features = VariableFeatures(object = tils), set.seed(42))
+
+#elbow plot & JackStraw plot to determine number of principal components to include
+ElbowPlot(tils, ndims = 30)
+tils <- JackStraw(tils, num.replicate = 100, dims=30)
+tils<- ScoreJackStraw(tils, dims = 1:30)
+JackStrawPlot(tils, dims = 1:30)
+
+#run Seurat's FindNeighbors function
+tils <- FindNeighbors(tils, dims=1:30, reduction = "pca")
+
+#Use Clustree to determine resolution of unintegrated clusters
+tils <- FindClusters(tils, resolution = 0.1, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.2, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.4, random.seed = 42)  
+tils <- FindClusters(tils, resolution = 0.6, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.8, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.0, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.2, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.4, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.6, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.8, random.seed = 42)
+
+tils <- FindClusters(tils, resolution = 2.0, cluster.name = "unintegrated_clusters", random.seed = 42)
+clustree(tils)
+
+#Run UMAP & plot it
+tils <- RunUMAP(tils, dims=1:30, reduction="pca", reduction.name = "umap.unintegrated", seed.use = 42) 
+DimPlot(tils, reduction = "umap.unintegrated", group.by = c("unintegrated_clusters"))
+
+
+saveRDS(tils, "/data/khasrawlab/elo8/newTILs-jan27/tils.noBC")
+
+
+
+#perform integration / batch correction
+tils <- IntegrateLayers(object = tils, method = CCAIntegration, orig.reduction = "pca", new.reduction = "integrated.cca", verbose = FALSE)
+
+# re-join layers after integration
+tils[["RNA"]] <- JoinLayers(tils[["RNA"]])
+
+
+#Run Seurat's Find Neighbors
+tils <- FindNeighbors(tils, reduction = "integrated.cca", dims = 1:30)
+
+#Use Clustree to Determine Resolution
+tils <- FindClusters(tils, resolution = 0.1, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.2, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.4, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.6, random.seed = 42) 
+tils <- FindClusters(tils, resolution = 0.8, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.0, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.2, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.4, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.6, random.seed = 42, cluster.name = "integrated_clusters_26")
+tils <- FindClusters(tils, resolution = 1.8, random.seed = 42)
+tils <- FindClusters(tils, resolution = 2.0, random.seed = 42)
+
+clustree(tils)
+
+#Run UMAP
+tils <- RunUMAP(tils, dims = 1:30, reduction = "integrated.cca", reduction.name = "umap.integrated", random.seed = 42)
+DimPlot(tils, reduction = "umap.integrated", group.by = c("integrated_clusters_26"))
+
+
+saveRDS(tils, "/data/khasrawlab/elo8/newTILs-jan27/tils.BC")
+```
+
+
+#At try at manual annotation (not sure if I will keep)
+```{r}
+
+Idents(tils) <- "integrated_clusters_26"
+cluster0 <- FindMarkers(tils, ident.1 = "0",ident.2 = NULL, test.use = "wilcox", only.pos = TRUE)
+cluster0 <- cluster0[cluster0[, "p_val_adj"] <= 0.05, ]
+write.csv(cluster0, file = "cluster0.csv", row.names = TRUE)
+
+for (i in 0:25) {
+  cluster_name <- paste0("cluster", i)
+  cluster_markers <- FindMarkers(tils, ident.1 = as.character(i), ident.2 = NULL, test.use = "wilcox", only.pos = TRUE)
+  cluster_markers <- cluster_markers[cluster_markers[, "p_val_adj"] <= 0.05, ]
+  write.csv(cluster_markers, file = paste0(cluster_name, ".csv"), row.names = TRUE)
+}
+
+
+
+
+```
+
+
+##Single R runs for automatic annotation
+Single R Vignette:
+https://bioconductor.org/packages/3.20/bioc/vignettes/SingleR/inst/doc/SingleR.html
+
+GBM reference dataset: https://cellxgene.cziscience.com/collections/999f2a15-3d7e-440b-96ae-2c806799c08c
+GBM dataset research publication: https://www.biorxiv.org/content/10.1101/2022.08.27.505439v1
+
+
+```{r}
+tils.matrix <- GetAssayData(tils, assay="RNA", layer = "data")
+gbm.ref.sparse <- readRDS("/data/khasrawlab/elo8/final-tils/gbm.ref.sparse")
+gbm.ref.anno3 <- readRDS("/data/khasrawlab/elo8/final-tils/gbm.ref.anno3")
+#gbm.ref.anno2 <- readRDS("/data/khasrawlab/elo8/final-tils/gbm.celltypes.anno2")
+
+tils.clusters <- tils$integrated_clusters_26
+
+pred.tils.labels.clusters.anno3 <- SingleR(test = tils.matrix, 
+                         ref = gbm.ref.sparse,   
+                         labels = gbm.ref.anno3, 
+                         fine.tune = TRUE, 
+                         num.threads = 40,
+                         de.method = "wilcox",
+                         clusters= tils.clusters)
+
+saveRDS(pred.tils.labels.clusters.anno3, "/data/khasrawlab/elo8/newTILs-jan27/pred.tils.clusters.labels.anno3")
+
+
+#add cluster labels back to seurat clusters
+Idents(tils) <- "integrated_clusters_26"
+cluster_label_map <- setNames(pred.tils.labels.clusters.anno3$labels, rownames(pred.tils.labels.clusters.anno3))
+tils@meta.data$cluster.labels <- cluster_label_map[as.character(Idents(tils))]
+
+#add pruned labels to seurat clusters (will remove labels singleR was not confident in)
+Idents(tils) <- "integrated_clusters_26"
+cluster_label_map <- setNames(pred.tils.labels.clusters.anno3$pruned.labels, rownames(pred.tils.labels.clusters.anno3))
+tils@meta.data$cluster.pruned.labels <- cluster_label_map[as.character(Idents(tils))]
+
+
+
+#first visualizations
+annotation.colors <- c("Astrocyte"="red3", 
+                       "Endothelial"="orange2",
+                       "Mural cell" = "coral",
+                       "CD4/CD8"="yellow",
+                       "AC-like"="darkseagreen2",
+                       "OPC-like"="green2",
+                       "NPC-like"="darkgreen",
+                       "MES-like" = "olivedrab3",
+                       "TAM-BDM" = "lightblue1",
+                       "TAM-MG" = "royalblue1",
+                       "Mono" = "steelblue3",
+                       "Mast" = "mediumblue",
+                       "NK" = "turquoise3",
+                       "DC" = "cyan",
+                       "Oligodendrocyte" = "magenta3",
+                       "OPC" = "purple4",
+                       "Plasma B" = "lightpink",
+                       "RG" = "hotpink",
+                       "Neuron" = "slateblue2")
+
+
+DimPlot(tils, reduction = "umap.integrated", group.by= "cluster.labels") + scale_color_manual(values =annotation.colors) + theme(plot.background = element_rect(fill = "gray90", color = NA))
+
+DimPlot(tils, reduction = "umap.integrated", group.by= "cluster.pruned.labels") + scale_color_manual(values =annotation.colors) + theme(plot.background = element_rect(fill = "gray90", color = NA))
+
+```
+
+
+##Run singleR on single cells in tils to identify CD4/CD8 cluster (cause then can subcluster the cluster it is located in) 
+#MAYBE NOT NEEDED!!!
+
+```{r}
+
+pred.tils.labels.cells.anno3 <- SingleR(test = tils.matrix, 
+                         ref = gbm.ref.sparse,   
+                         labels = gbm.ref.anno3, 
+                         fine.tune = TRUE, 
+                         num.threads = 40,
+                         de.method = "wilcox")
+
+saveRDS(pred.tils.labels.cells.anno3, "/data/khasrawlab/elo8/newTILs-jan27/pred.tils.cells.labels.anno3")
+tils@meta.data$cell.labels <- pred.tils.labels.cells.anno3$labels
+
+DimPlot(tils, reduction = "umap.integrated", group.by= "cell.labels") + scale_color_manual(values =annotation.colors)+ theme(plot.background = element_rect(fill = "gray90", color = NA))
+
+
+```
+
+##Check automatic annotations
+```{r}
+plotScoreHeatmap(pred.tils.labels.clusters.anno3)
+```
+
+#Subclustering the cluster labeled NA in the pruned labels of SingleR
+perhaps, the cluster is heterogeneous (combination of different tumor subtypes) making its classification to one subtype unreliable
+```{r}
+
+Idents(tils) <- "cluster.pruned.labels"
+
+#NA is not a string in metadata so unable to pull it out for subclustering as of now
+#name NA cells with "Unknown"
+tils$pruned.labels.clean <- ifelse(is.na(tils$cluster.pruned.labels), "Unknown", tils$cluster.pruned.labels)
+
+#set pruned.labels.clean as new Ident to enable referencing it
+Idents(tils) <- "pruned.labels.clean"
+
+tils <- FindSubCluster(
+  object = tils,
+  cluster = "Unknown",
+  graph.name = "RNA_snn",
+  subcluster.name = "subcluster.unknown",
+  resolution = 0.3,
+  algorithm = 2
+)
+
+#at res = 0.2, 1 cluster (maximum modularity = 0.8000)
+#at res, 0.3, 2 clusters (maximum modularity = 0.7095)
+
+Idents(tils) <- "subcluster.unknown"
+DimPlot(tils, reduction = "umap.integrated", group.by = c("subcluster.unknown"))
+
+```
+#SingleR run on subcluster to identify the identity of the cluster labeled NA in pruned.labels
+```{r}
+tils.subclusters <- tils$subcluster.unknown
+
+pred.tils.labels.subcluster.anno3 <- SingleR(test = tils.matrix, 
+                         ref = gbm.ref.sparse,   
+                         labels = gbm.ref.anno3, 
+                         fine.tune = TRUE, 
+                         num.threads = 40,
+                         de.method = "wilcox",
+                         clusters= tils.subclusters)
+
+saveRDS(pred.tils.labels.subcluster.anno3, "/data/khasrawlab/elo8/newTILs-jan27/pred.tils.subcluster.labels.anno3")
+
+
+#add cluster labels back to seurat clusters
+Idents(tils) <- "subcluster.unknown"
+cluster_label_map <- setNames(pred.tils.labels.subcluster.anno3$labels, rownames(pred.tils.labels.subcluster.anno3))
+tils@meta.data$subcluster.labels <- cluster_label_map[as.character(Idents(tils))]
+
+#add pruned labels of custers back to seurat clusters
+Idents(tils) <- "subcluster.unknown"
+cluster_label_map <- setNames(pred.tils.labels.subcluster.anno3$pruned.labels, rownames(pred.tils.labels.subcluster.anno3))
+tils@meta.data$subcluster.pruned.labels <- cluster_label_map[as.character(Idents(tils))]
+
+
+#first visualizations
+annotation.colors <- c("Astrocyte"="red3", 
+                       "Endothelial"="orange2",
+                       "Mural cell" = "coral",
+                       "CD4/CD8"="gold1",
+                       "AC-like"="darkseagreen2",
+                       "OPC-like"="green2",
+                       "NPC-like"="darkgreen",
+                       "MES-like" = "olivedrab3",
+                       "TAM-BDM" = "lightblue1",
+                       "TAM-MG" = "royalblue1",
+                       "Mono" = "steelblue3",
+                       "Mast" = "mediumblue",
+                       "NK" = "turquoise3",
+                       "DC" = "cyan",
+                       "Oligodendrocyte" = "magenta3",
+                       "OPC" = "purple4",
+                       "Plasma B" = "lightpink",
+                       "RG" = "hotpink",
+                       "Neuron" = "slateblue2")
+
+annotation.colors <- c("Astrocyte"="royalblue1", 
+                       "Endothelial"="red",
+                       "Mural cell" = "orange2",
+                       "CD4/CD8"="yellow2",
+                       "AC-like"="blue",
+                       "OPC-like"="aquamarine",
+                       "NPC-like"="darkblue",
+                       "MES-like" = "turquoise3",
+                       "TAM-BDM" = "violet",
+                       "TAM-MG" = "lightpink",
+                       "Mono" = "deeppink1",
+                       "Mast" = "slateblue2",
+                       "Oligodendrocyte" = "forestgreen",
+                       "OPC" = "darkseagreen3",
+                       "Neuron" = "purple3")
+
+
+DimPlot(tils, reduction = "umap.integrated", group.by= "subcluster.labels") + scale_color_manual(values =annotation.colors) + theme(plot.background = element_rect(fill = "gray90", color = NA))
+
+DimPlot(tils, reduction = "umap.integrated", group.by= "subcluster.pruned.labels") + scale_color_manual(values =annotation.colors) + theme(plot.background = element_rect(fill = "gray90", color = NA))
+
+
+DimPlot(tils, reduction = "umap.integrated", group.by= "subcluster.scores") + theme(plot.background = element_rect(fill = "gray90", color = NA))
+```
+
+
+##check quality of subcluster annotations
+```{r}
+plotScoreHeatmap(pred.tils.labels.subcluster.anno3)
+
+```
+
+#Run SingleR with annotation level 4 -- differentiating between proliferative tumor types
+```{r}
+#get that annotation level
+ gbm.ref <- readRDS("gbmrefFull.rds")
+gbm.ref.anno4 <- gbm.ref$annotation_level_4
+saveRDS(gbm.ref.anno4, "/data/khasrawlab/elo8/newTILs-jan27/gbm.ref.anno4")
+gbm.ref.sparse <- readRDS("/data/khasrawlab/elo8/final-tils/gbm.ref.sparse")
+gbm.ref.anno4 <- readRDS("/data/khasrawlab/elo8/newTILs-jan27/gbm.ref.anno4")
+
+tils.matrix <- GetAssayData(tils, assay = "RNA", layer = "data")
+
+tils.clusters <- tils$integrated_clusters_26
+
+pred.tils.labels.anno4 <- SingleR(test = tils.matrix, 
+                         ref = gbm.ref.sparse,   
+                         labels = gbm.ref.anno4, 
+                         fine.tune = TRUE, 
+                         num.threads = 40,
+                         de.method = "wilcox",
+                         clusters= tils.clusters)
+
+saveRDS(pred.tils.labels.anno4, "/data/khasrawlab/elo8/newTILs-jan27/pred.tils.labels.anno4")
+
+#check labels & pruned
+print(unique(pred.tils.labels.anno4$labels))
+print(unique(pred.tils.labels.anno4$pruned.labels))
+
+
+#add cluster labels back to seurat clusters
+Idents(tils) <- "integrated_clusters_26"
+cluster_label_map <- setNames(pred.tils.labels.anno4$labels, rownames(pred.tils.labels.anno4))
+tils@meta.data$cluster.labels.anno4 <- cluster_label_map[as.character(Idents(tils))]
+
+#add pruned labels of custers back to seurat clusters
+Idents(tils) <- "integrated_clusters_26"
+cluster_label_map <- setNames(pred.tils.labels.anno4$pruned.labels, rownames(pred.tils.labels.anno4))
+tils@meta.data$cluster.labels.anno4 <- cluster_label_map[as.character(Idents(tils))]
+
+DimPlot(tils, reduction = "umap.integrated", group.by= "cluster.labels.anno4") #+ scale_color_manual(values =annotation.colors) 
+
+#Subcluster NA subcluster, Astrocyte, endo capilar, perivascular fibroblast, AC-like prolif, Mono anti-infl
+
+
+Idents(tils) <- "cluster.labels.anno4"
+
+#NA is not a string in metadata so unable to pull it out for subclustering as of now
+#name NA cells with "Unknown"
+tils$pruned.labels <- ifelse(is.na(tils$cluster.labels.anno4), "Unknown", tils$cluster.labels.anno4)
+
+#set pruned.labels.clean as new Ident to enable referencing it
+Idents(tils) <- "pruned.labels"
+
+tils <- FindSubCluster(
+  object = tils,
+  cluster = "Unknown",
+  graph.name = "RNA_snn",
+  subcluster.name = "subcluster.unknown",
+  resolution = 0.5,
+  algorithm = 2
+)
+
+Idents(tils) <- "subcluster.unknown"
+
+tils <- FindSubCluster(
+  object = tils,
+  cluster = "Astrocyte",
+  graph.name = "RNA_snn",
+  subcluster.name = "subcluster.unknown",
+  resolution = 0.5,
+  algorithm = 2
+)
+
+Idents(tils) <- "subcluster.unknown"
+
+tils <- FindSubCluster(
+  object = tils,
+  cluster = "Mono anti-infl",
+  graph.name = "RNA_snn",
+  subcluster.name = "subcluster.unknown",
+  resolution = 0.5,
+  algorithm = 2
+)
+
+Idents(tils) <- "subcluster.unknown"
+
+tils <- FindSubCluster(
+  object = tils,
+  cluster = "AC-like Prolif",
+  graph.name = "RNA_snn",
+  subcluster.name = "subcluster.unknown",
+  resolution = 0.5,
+  algorithm = 2
+)
+
+Idents(tils) <- "subcluster.unknown"
+
+tils <- FindSubCluster(
+  object = tils,
+  cluster = "Perivascular fibroblast",
+  graph.name = "RNA_snn",
+  subcluster.name = "subcluster.unknown",
+  resolution = 0.5,
+  algorithm = 2
+)
+
+Idents(tils) <- "subcluster.unknown"
+
+tils <- FindSubCluster(
+  object = tils,
+  cluster = "Endo capilar",
+  graph.name = "RNA_snn",
+  subcluster.name = "subcluster.unknown",
+  resolution = 0.5,
+  algorithm = 2
+)
+
+
+#at res = 0.2, 1 cluster (maximum modularity = 0.8000)
+#at res, 0.3, 2 clusters (maximum modularity = 0.7095)
+
+Idents(tils) <- "subcluster.unknown"
+DimPlot(tils, reduction = "umap.integrated", group.by = c("subcluster.unknown"))
+
+
+
+```
+
+#SingleR with subclustering
+```{r}
+
+tils.matrix <- GetAssayData(tils, assay = "RNA", layer = "data")
+
+tils.clusters <- tils$subcluster.unknown
+
+pred.tils.subcluster.labels.anno4 <- SingleR(test = tils.matrix, 
+                         ref = gbm.ref.sparse,   
+                         labels = gbm.ref.anno4, 
+                         fine.tune = TRUE, 
+                         num.threads = 40,
+                         de.method = "wilcox",
+                         clusters= tils.clusters)
+
+saveRDS(pred.tils.subcluster.labels.anno4, "/data/khasrawlab/elo8/newTILs-jan27/pred.tils.subcluster.labels.anno4")
+
+#check labels & pruned
+print(unique(pred.tils.subcluster.labels.anno4$labels))
+print(unique(pred.tils.subcluster.labels.anno4$pruned.labels))
+
+print(pred.tils.subcluster.labels.anno4$labels)
+print(pred.tils.subcluster.labels.anno4$pruned.labels)
+
+
+
+#add cluster labels back to seurat clusters
+Idents(tils) <- "subcluster.unknown"
+cluster_label_map <- setNames(pred.tils.subcluster.labels.anno4$labels, rownames(pred.tils.subcluster.labels.anno4))
+tils@meta.data$subcluster.labels.anno4 <- cluster_label_map[as.character(Idents(tils))]
+
+#add pruned labels of custers back to seurat clusters
+Idents(tils) <- "integrated_clusters_26"
+cluster_label_map <- setNames(pred.tils.subcluster.labels.anno4$pruned.labels, rownames(pred.tils.subcluster.labels.anno4))
+tils@meta.data$subcluster.labels.anno4 <- cluster_label_map[as.character(Idents(tils))]
+
+Idents(tils) <- "subcluster.labels.anno4"
+DimPlot(tils, reduction = "umap.integrated", group.by= c("subcluster.labels.anno4")) 
+
+plotScoreHeatmap(pred.tils.subcluster.labels.anno4)
+
+tils$subcluster.labels.anno4 <- ifelse(is.na(tils$subcluster.labels.anno4), "Unknown", tils$cluster.labels.anno4)
+
+saveRDS(tils, "/data/khasrawlab/elo8/newTILs-jan27/tils.resave.anno4")
+
+#Same cluster still labeled NA : 2) run single r on all individual cells to see what clusters there
+#1) findMarkers on cluster unknown
+
+Idents(tils) <- "subcluster.labels.anno4"
+unknown.degs <- FindMarkers(tils, ident.1 = "Unknown",ident.2 = NULL, test.use = "wilcox")
+unknown.degs <- unknown.degs[unknown.degs[, "p_val_adj"] <= 0.05, ]
+unknown.degs <- cbind(unknown.degs, expression = ifelse(unknown.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+unknown.degs <- unknown.degs[order(unknown.degs[, "expression"], unknown.degs[, "p_val_adj"]), ]
+write.csv(unknown.degs, file = "unknown_degs.csv", row.names = TRUE)
+
+
+pred.tils.cell.labels.anno4 <- SingleR(test = tils.matrix, 
+                         ref = gbm.ref.sparse,   
+                         labels = gbm.ref.anno4, 
+                         fine.tune = TRUE, 
+                         num.threads = 40,
+                         de.method = "wilcox")
+
+saveRDS(pred.tils.cell.labels.anno4, "/data/khasrawlab/elo8/newTILs-jan27/pred.tils.cell.labels.anno4")
+
+pred.tils.cell.labels.anno4$labels==pred.tils.cell.labels.anno4$pruned.labels
+
+tils$cell.labels.anno4 <- pred.tils.cell.labels.anno4$pruned.labels
+  
+  
+  
+  
+DimPlot(tils, reduction = "umap.integrated", group.by = c("cell.labels.anno4"))
+saveRDS(tils, "/data/khasrawlab/elo8/newTILs-jan27/tils.annotated.level4.resave")
+
+saveRDS(tils, "/data/khasrawlab/elo8/newTILs-jan27/tils.annotated.level4.final.resave")
+#first change na to "unknown" so I can access them 
+
+# Create a vector of cell names based on a metadata variable
+tils$cell.labels.anno4  <- ifelse(is.na(tils$cell.labels.anno4 ), "Unknown", tils$cell.labels.anno4)
+Idents(tils) <- "cell.labels.anno4"
+highlight_cells <- WhichCells(tils, ident = "Unknown")
+
+# Generate DimPlot with highlighted cells
+DimPlot(tils, group.by = "cell.labels.anno4", 
+        cells.highlight = highlight_cells, 
+        cols.highlight = "red", cols = "gray", reduction = "umap.integrated")
+
+
+#singleR heatmaps to check predictions
+
+plotScoreHeatmap(pred.tils.subcluster.labels.anno4)
+
+```
+
+
+
+
+
+##Cell Composition Graphs & Statistical Analysis of Significance Differences in Cell Comp
+1) Propeller (t-test)
+- vignettes: https://phipsonlab.github.io/propeller-paper-analysis/pbmcJP.html
+              https://github.com/phipsonlab/speckle
+              
+2) Chi Squared Independence Test
+- used for categorical variables
+
+3) Mann-Whitney-Wilcoxon Test
+https://www.r-tutor.com/elementary-statistics/non-parametric-methods/mann-whitney-wilcoxon-test
+
+4) Differential Abundance Analysis with edgeR
+```{r}
+
+#1) T-test using Propeller-----
+#calculate & graph cell composition for til+ vs tils-
+#changing order of labels (so tumor subtypes are together)
+tils$cluster.celltypes <- factor(tils$subcluster.labels, levels = c("Astrocyte", "Mural cell","Endothelial", "CD4/CD8", "AC-like", "OPC-like", "NPC-like","MES-like", "TAM-BDM", "TAM-MG", "Mono", "Oligodendrocyte", "OPC","Neuron"))
+    
+#extract metadata from tils object
+#change metadata variable condition to fit manuscript classification
+tils$condition <- recode(tils$condition, 
+                                       "TIL with IL2" = "TIL+", 
+                                       "no TILs" = "TIL-")
+# Reorder the levels of the factor (to match manuscript order)
+tils$condition <- factor(tils$condition, levels = c("TIL+", "TIL-"))
+
+#pull out dataframe of metadata
+tils.meta <- tils@meta.data
+
+#calculate proportions of each cell type
+prop_data <- tils.meta %>%
+  group_by(condition = tils.meta$condition, celltype = tils.meta$cluster.celltypes) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(condition) %>%
+  mutate(proportion = count / sum(count))
+
+#graph two bar plots to show cell type proportion for no TILs and TIL with IL2 samples-----
+cellcomp <- ggplot(prop_data, aes(x = condition, y = proportion, fill = celltype)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = annotation.colors) +
+  labs(x = "Condition", y = "Proportion", fill = "Cell Type") +
+  theme_minimal() +theme(legend.text = element_text(size = 10, face = "bold"),
+    legend.title = element_text(size = 12, face = "bold"),
+    plot.background = element_rect(fill = "gray100", color = NA),
+     axis.title.x = element_text(size = 12, face = "bold", colour = "black"),
+
+    axis.title.y = element_text(size = 12, face = "bold", colour = "black"),)
+
+cellcomp
+ggsave("cellcompupdate.png", plot = cellcomp, width = 6, height = 4, dpi = 300)
+
+#plotting cell compositions of each sample individually----
+
+#subset out til+ and til-
+yestils <- subset(tils,  subset = condition == "TIL with IL2")
+notils <- subset(tils,  subset = condition == "no TILs")
+
+#calculate cell type proportions for til+ samples 
+yestils.meta <- yestils@meta.data
+prop_data <- yestils.meta %>%
+  group_by(condition = yestils.meta$orig.ident, celltype = yestils.meta$cluster.celltype) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(condition) %>%
+  mutate(proportion = count / sum(count))
+
+#plot cell comp graph for til+ samples
+ggplot(prop_data, aes(x = condition, y = proportion, fill = celltype)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = annotation.colors) +
+  labs(x = "Sample", y = "Proportion", fill = "Cell Type") +
+  theme_minimal()
+
+#calculate cell type proportions for til- samples 
+notils.meta <- notils@meta.data
+prop_data <- notils.meta %>%
+  group_by(condition = notils.meta$orig.ident, celltype = notils.meta$cluster.celltype) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(condition) %>%
+  mutate(proportion = count / sum(count))
+
+#plot cell comp graph for til- samples
+ggplot(prop_data, aes(x = condition, y = proportion, fill = celltype)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = annotation.colors) +
+  labs(x = "Sample", y = "Proportion", fill = "Cell Type") +
+  theme_minimal()
+
+#Significance determined by t-test
+tils.cellpropdiff <- propeller(clusters = tils$subcluster.labels, sample = tils$orig.ident, 
+          group = tils$condition)
+tils.cellpropdiff
+
+#2) Chi Squared Test ----
+
+# create dataframe with condition as rows and cell labels as columns with counts as entries
+count_mat = table(tils$condition, tils$subcluster.labels)
+
+#run chi square test on data
+chi_square_result <- chisq.test(count_mat)
+print(chi_square_result)
+
+# Conduct post hoc analysis
+post_hoc_results <- chisq.posthoc.test(count_mat)
+
+#use various methods for addressing FDR from multiple comparisons to seee if significance is changed
+corrected_post_hoc_bon <- chisq.posthoc.test(count_mat, method = "bonferroni")
+corrected_post_hoc_holm <- chisq.posthoc.test(count_mat, method = "holm")
+corrected_post_hoc_bh <- chisq.posthoc.test(count_mat, method = "BH")
+corrected_post_hoc_hochberg <- chisq.posthoc.test(count_mat, method = "hochberg")
+corrected_post_hoc_fdr <- chisq.posthoc.test(count_mat, method = "fdr")
+# Print post hoc results
+print(corrected_post_hoc)
+
+
+#code to put significance bars on my graph (not that great cause same cell types are not always horizontal in the bar graphs)
+comparison_list <- list(
+    c("TIL with IL2", "no TILs"),  # For Mural cell
+  c("TIL with IL2", "no TILs"),  # For CD4/CD8
+  c("no TILs", "TIL with IL2"),   # For AC-like
+  c("no TILs", "TIL with IL2"),   # For OPC-like
+  c("TIL with IL2", "no TILs"),  # For MES-like
+  c("TIL with IL2", "no TILs"),  # For TAM-BDM
+    c("TIL with IL2", "no TILs")  # For Monocyte
+)
+
+significance_data <- data.frame(
+  celltype = c("Mural cell", "CD4/CD8", "AC-like", "OPC-like", "MES-like", "TAM-BDM", "Mono"),
+  condition1 = c("TIL with IL2", "TIL with IL2", "no TILs","no TILs", "TIL with IL2", "TIL with IL2", "TIL with IL2"),
+  condition2 = c("no TILs", "no TILs",  "TIL with IL2",  "TIL with IL2", "no TILs", "no TILs", "no TILs"),
+  y_position = c(0.73, 0.71, 0.59, 0.39, 0.46, 0.2, 0.15),  # Adjust y_position based on your data
+  significance = c("***", "*", "****", "****", "****", "****", "****")  # significance levels
+)
+ 
+cellcomp <- ggplot(prop_data, aes(x = condition, y = proportion, fill = celltype)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = annotation.colors) +
+  labs(x = "Condition", y = "Proportion", fill = "Cell Type") +
+  theme_minimal() + theme(
+    legend.text = element_text(size = 10, face = "bold"),
+    legend.title = element_text(size = 12, face = "bold")) + geom_signif(
+              comparisons = comparison_list, 
+              annotations = significance_data$significance, 
+              y_position = significance_data$y_position, 
+              tip_length = 0.01, vjust = 0.5)
+ggsave("cellcomp.png", plot = cellcomp, width = 10, height = 8, dpi = 300)
+cellcomp
+
+#3) Wilcox Manley Test-----
+# Load required libraries
+library(Seurat)
+
+# Assuming 'tils' is your Seurat object
+# Extract metadata
+tils.meta <- tils@meta.data
+
+# Create a contingency table for proportions of cell types
+table_data <- table(tils.meta$subcluster.labels, tils.meta$condition)
+
+# Convert contingency table to data frame
+prop_data <- as.data.frame(prop.table(table_data, margin = 2))
+
+# Rename columns for easier understanding
+colnames(prop_data) <- c("Cell Type", "Condition", "Proportion")
+
+# Split the data by condition
+group1 <- prop_data$Proportion[prop_data$Condition == "TIL+"]  
+group2 <- prop_data$Proportion[prop_data$Condition == "TIL-"]  
+
+# Perform the Mann-Whitney-Wilcoxon Test
+wilcox_test_result <- wilcox.test(group1, group2, alternative = "two.sided")
+
+# Display the result
+print(wilcox_test_result)
+
+
+#performing test for all cell types
+
+# Get unique subclusters
+unique_subclusters <- unique(tils.meta$subcluster.labels)
+
+# Initialize a data frame to store results
+results <- data.frame(Subcluster = character(), 
+                     W = numeric(), 
+                     p_value = numeric(), 
+                     stringsAsFactors = FALSE)
+
+# Loop through each unique subcluster
+for (subcluster in unique_subclusters) {
+    # Calculate proportions for each group
+    prop_group1 <- table(tils.meta$subcluster.labels[tils.meta$condition == "TIL+"]) / 
+                   sum(tils.meta$condition == "TIL+")
+    prop_group2 <- table(tils.meta$subcluster.labels[tils.meta$condition == "TIL-"]) / 
+                   sum(tils.meta$condition == "TIL-")
+
+    # Perform the Mann-Whitney-Wilcoxon test
+    test_result <- wilcox.test(as.numeric(prop_group1[subcluster]), 
+                              as.numeric(prop_group2[subcluster]), 
+                              alternative = "two.sided")
+
+    # Store results in the data frame
+    results <- rbind(results, 
+                    data.frame(Subcluster = subcluster,
+                             W = test_result$statistic,
+                             p_value = test_result$p.value))
+}
+print(results)
+
+
+#4) Differential abundance analysis with edgeR----
+tils.counts <- GetAssayData(tils, assay = "RNA", layer = "counts")
+y <- DGEList(counts = tils.counts, group = tils$condition)
+y <- calcNormFactors(y)
+y <- estimateDisp(y)
+design <- model.matrix(~ group)
+fit <- glmFit(y, design)
+
+#5) Method Used ------
+# Extract metadata
+tils.meta <- tils@meta.data
+
+# Create a contingency table for proportions of cell types
+table_data <- table(tils.meta$orig.ident, tils.meta$subcluster.labels)
+
+# Convert contingency table to data frame
+prop_data <- as.data.frame(prop.table(table_data, margin = 2))
+
+# Rename columns for easier understanding
+colnames(prop_data) <- c("Sample", "Cell Type", "Proportion")
+
+#Add condition variable to table
+prop_data$Condition <- tils.meta$condition[match(prop_data$Sample, tils.meta$orig.ident)]
+
+# Split the data by condition
+group1 <- prop_data$Proportion[prop_data$Condition == "TIL+"]  
+group2 <- prop_data$Proportion[prop_data$Condition == "TIL-"]  
+
+
+# Shapiro-Wilk Test
+shapiro_test_group1 <- shapiro.test(group1)
+shapiro_test_group2 <- shapiro.test(group2)
+
+# Output
+print(shapiro_test_group1)  #p-value = 0.02408
+print(shapiro_test_group2) #p-value = 0.001713
+#data is not normally distributed!
+
+
+#  Mann-Whitney U Test
+wilcox_test <- wilcox.test(group1, group2, exact = FALSE)
+
+# Output
+print(wilcox_test) #W = 110, p-value = 0.5972
+
+
+# Extract metadata ( can't do tams because need cell types)
+Idents(tils) <- "subcluster.labels"
+tils.tams.bdm <- subset(tils, subset=subcluster.labels =="TAM-BDM")
+tils.tams.meta <- tils.tams@meta.data
+
+# Create a contingency table for proportions of cell types
+table_data_tams <- table(tils.tams.meta$subcluster.labels, tils.tams.meta$condition)
+
+# Convert contingency table to data frame
+prop_data_tams <- as.data.frame(prop.table(table_data_tams, margin = 2))
+
+# Rename columns for easier understanding
+colnames(prop_data_tams) <- c("Cell Type", "Condition", "Proportion")
+
+# Split the data by condition
+group1.tams <- prop_data_tams$Proportion[prop_data_tams$Condition == "TIL+"]  
+group2.tams <- prop_data_tams$Proportion[prop_data_tams$Condition == "TIL-"]  
+
+
+# Shapiro-Wilk Test
+shapiro_test_group1.tams <- shapiro.test(group1.tams)
+shapiro_test_group2.tams <- shapiro.test(group2.tams)
+
+# Output
+print(shapiro_test_group1.tams)  #p-value = 0.02408
+print(shapiro_test_group2.tams) #p-value = 0.001713
+#data is not normally distributed!
+
+
+#  Mann-Whitney U Test
+wilcox_test <- wilcox.test(group1.tams, group2.tams, exact = FALSE)
+
+# Output
+print(wilcox_test) # p-value = 1
+
+# Extract metadata
+
+tils.tumor <- subset(tils, subset=subcluster.labels =="AC-like"|subcluster.labels =="OPC-like"| subcluster.labels == "NPC-like"| 
+                       subcluster.labels == "MES-like")
+tils.meta.tumor <- tils.tumor@meta.data
+# Create a contingency table for proportions of cell types
+table_data.tumor <- table(tils.meta.tumor$subcluster.labels, tils.meta.tumor$condition)
+
+# Convert contingency table to data frame
+prop_data.tumor <- as.data.frame(prop.table(table_data.tumor, margin = 2))
+
+# Rename columns for easier understanding
+colnames(prop_data.tumor) <- c("Cell Type", "Condition", "Proportion")
+
+# Split the data by condition
+group1.tumor <- prop_data.tumor$Proportion[prop_data.tumor$Condition == "TIL+"]  
+group2.tumor <- prop_data.tumor$Proportion[prop_data.tumor$Condition == "TIL-"]  
+
+
+# Shapiro-Wilk Test
+shapiro_test_group1.tumor <- shapiro.test(group1.tumor)
+shapiro_test_group2.tumor <- shapiro.test(group2.tumor)
+
+# Output
+print(shapiro_test_group1.tumor) #p-value = 0.1186
+print(shapiro_test_group2.tumor) #p-value = 0.3686
+#data is normally distributed?
+
+
+#  Mann-Whitney U Test
+wilcox_test.tumor <- wilcox.test(group1.tumor, group2.tumor, exact = FALSE)
+
+# Output
+print(wilcox_test.tumor) #W = 6, p-value = 0.665
+
+#FOR TAMs
+
+# Access the metadata
+Idents(tils) <- "subcluster.labels"
+tils.tams <- subset(tils,subset = subcluster.labels == "TAM-MG" | subcluster.labels == "TAM-BDM")
+metadata.tams <- tils.tams@meta.data
+
+# Create a contingency table
+contingency_table.tams <- table(metadata.tams$orig.ident, metadata.tams$subcluster.labels)
+
+# Calculate the proportions
+proportions.tams <- prop.table(contingency_table.tams , margin = 1) # margin = 1 ensures proportions are calculated within each orig.ident group
+
+
+
+# Generating Test data (for TAM-BDM)
+group1 <- c(0.5901639, 0.8139535, 23-0227, 23-0257) #tils
+group2 <- c(0.6250000, 0.4242424, 0.8431373, 0.6785714) #no tils
+ 
+# Shapiro-Wilk Test
+shapiro_test_group1 <- shapiro.test(group1)
+shapiro_test_group2 <- shapiro.test(group2)
+ 
+# Output
+print(shapiro_test_group1) #p-value = 0.07617
+print(shapiro_test_group2) # p-value = 0.9266
+ 
+#  Mann-Whitney U Test
+wilcox_test.tamsBDM <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.tamsBDM) #TAM-BDM -> p-value = 0.3123
+
+#TAM-MGs
+
+# Generating Test data
+group1 <- c(0.4098361, 0.1860465, 0.1587302, 0.3203883) #tils
+group2 <- c(0.3750000, 0.5757576, 0.1568627, 0.3214286) #no tils
+ 
+# Shapiro-Wilk Test
+shapiro_test_group1 <- shapiro.test(group1)
+shapiro_test_group2 <- shapiro.test(group2)
+ 
+# Output
+print(shapiro_test_group1) # p-value = 0.5103
+print(shapiro_test_group2) # p-value = 0.9266
+ 
+#  Mann-Whitney U Test
+wilcox_test.tamMG <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.tamMG) #TAM-MG p-value = 0.665
+
+
+#tumor types now 
+
+tils.tumor <- subset(tils, subset=subcluster.labels =="AC-like"|subcluster.labels =="OPC-like"| subcluster.labels == "NPC-like"| 
+                       subcluster.labels == "MES-like")
+tils.meta.tumor <- tils.tumor@meta.data
+
+metadata.tumor <- tils.tumor@meta.data
+
+# Create a contingency table
+contingency_table.tumor<- table(metadata.tumor$orig.ident, metadata.tumor$subcluster.labels)
+
+# Calculate the proportions
+proportions.tumor <- prop.table(contingency_table.tumor , margin = 1) # margin = 1 ensures proportions are calculated within each orig.ident group
+
+# Create a contingency table for proportions of cell types
+table_data.tumor <- table(tils.meta.tumor$orig.ident, tils.meta.tumor$subcluster.labels)
+
+# Convert contingency table to data frame
+prop_data.tumor <- prop.table(table_data.tumor, margin = 2)
+
+#AC-like
+# Generating Test data
+group1 <- c(0.067495560, 0.132326821, 0.101243339, 0.190941385) #tils
+group2 <- c(0.082593250, 0.131438721, 0.132326821, 0.161634103) #no tils
+ 
+# Shapiro-Wilk Test
+shapiro_test_group1 <- shapiro.test(group1)
+shapiro_test_group2 <- shapiro.test(group2)
+ 
+# Output
+print(shapiro_test_group1) #p-value = 0.909
+print(shapiro_test_group2) #p-value = 0.5456
+ 
+#  Mann-Whitney U Test
+wilcox_test.aclike <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.aclike) #AC-like ->  p-value = 1
+
+
+#MES-like
+# Generating Test data
+group1 <- c(0.063333333, 0.091666667, 0.125000000, 0.435000000) #tils
+group2 <- c(0.065000000, 0.018333333, 0.198333333, 0.003333333) #no tils
+ 
+# Shapiro-Wilk Test
+shapiro_test_group1 <- shapiro.test(group1)
+shapiro_test_group2 <- shapiro.test(group2)
+ 
+# Output
+print(shapiro_test_group1) #p-value = 0.04906
+print(shapiro_test_group2) #p-value = 0.2316
+ 
+#  Mann-Whitney U Test
+wilcox_test.meslike <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.meslike) #MES-like -> p-value = 0.3123
+
+
+# NPC-like
+# Generating Test data
+group1 <- c(0.236842105, 0.065789474, 0.098684211, 0.111842105) #tils
+group2 <- c(0.157894737, 0.125000000, 0.171052632, 0.032894737) #no tils
+ 
+# Shapiro-Wilk Test
+shapiro_test_group1 <- shapiro.test(group1)
+shapiro_test_group2 <- shapiro.test(group2)
+ 
+# Output
+print(shapiro_test_group1) #p-value = 0.2316
+print(shapiro_test_group2) #p-value = 0.2829
+ 
+#  Mann-Whitney U Test
+wilcox_test.npclike <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.npclike) #NPC-like ->p-value = 0.8852
+
+
+# OPC-like
+# Generating Test data
+group1 <- c(0.133204633, 0.121621622, 0.095559846, 0.169884170) #tils
+group2 <- c(0.080115830, 0.118725869, 0.160231660, 0.120656371) #no tils
+ 
+# Shapiro-Wilk Test
+shapiro_test_group1 <- shapiro.test(group1)
+shapiro_test_group2 <- shapiro.test(group2)
+ 
+# Output
+print(shapiro_test_group1) #p-value = 0.9214
+print(shapiro_test_group2) #p-value = 0.748
+ 
+#  Mann-Whitney U Test
+wilcox_test.opclike <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.opclike) #OPC-like -> p-value = 0.4705
+
+#CD4/CD8 cluster
+metadata <- tils@meta.data
+
+# Create a contingency table
+contingency_table <- table(metadata$orig.ident, metadata$subcluster.labels)
+
+# Calculate the proportions
+proportions <- prop.table(contingency_table , margin = 1) # margin = 1 ensures proportions are calculated within each orig.ident group
+
+
+
+# Generating Test data for cd4/cd8
+group1 <- c(0.002344666, 0.014608234, 0.018967334,0.007451565) #tils
+group2 <- c(0.004237288, 0.002894356, 0.005148005, 0.001369863) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.cd4cd8 <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.cd4cd8) #p-value = 0.4705
+
+
+#for TAM-BDM
+group1 <- c(0.042203986, 0.092961487, 0.223393045,0.052160954) #tils
+group2 <- c(0.031779661, 0.020260492, 0.055341055, 0.104109589) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.tamsBDM <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.tamsBDM) #p-value = 0.4705
+
+#OPC-like
+group1 <- c(0.161781946, 0.167330677, 0.104320337,0.131147541) #tils
+group2 <- c(0.175847458, 0.178002894, 0.213642214, 0.171232877) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.opclike <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.opclike) #p-value = 0.03038 !!!!!!
+
+
+#AC like
+group1 <- c(0.089097304, 0.197875166, 0.120126449,0.160208644) #tils
+group2 <- c(0.197033898, 0.214182344, 0.191763192, 0.249315068) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.ac <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.ac) #p-value = 0.4705
+
+
+# MES like
+group1 <- c(0.044548652, 0.073041169, 0.079030558,0.194485842) #tils
+group2 <- c(0.082627119, 0.015918958, 0.153153153, 0.002739726) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.meslike <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.meslike) #p-value = 0.665
+
+#npc like
+group1 <- c(0.042203986, 0.013280212, 0.015806112,0.012667660) #tils
+group2 <- c(0.050847458, 0.027496382, 0.033462033, 0.006849315) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.npclike <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.npclike)  p-value = 0.665
+
+#monocyte
+group1 <- c(0.003516999, 0.005312085, 0.048472076,0.000000000) #tils
+group2 <- c(0.002118644, 0.002894356, 0.001287001, 0.002739726) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.mono <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.mono)  #p-value = 0.3123
+
+
+#TAM-mg
+
+group1 <- c(0.029308324, 0.021248340, 0.042149631,0.024590164) #tils
+group2 <- c(0.019067797, 0.027496382, 0.010296010, 0.049315068) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.tamMG <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.tamMG)  # p-value = 0.665
+
+#oligos
+group1 <- c(0.091441970, 0.042496680, 0.062170706,0.079731744) #tils
+group2 <- c(0.050847458, 0.052098408, 0.060489060, 0.067123288) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.oligo <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.oligo)  # p-value =0.4705
+
+#neuron
+group1 <- c(0.154747948, 0.046480744, 0.004214963,0.106557377) #tils
+group2 <- c(0.135593220, 0.118668596, 0.014157014, 0.009589041) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.neuron <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.neuron)  # p-value =1
+
+#opc
+group1 <- c(0.010550996, 0.009296149, 0.003161222,0.017138599) #tils
+group2 <- c(0.008474576, 0.026049204, 0.020592021, 0.009589041) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.opc <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.opc)  # p-value = 0.4705
+
+
+#mural cell
+group1 <- c(0.016412661, 0.035856574, 0.038988409,0.011177347) #tils
+group2 <- c(0.010593220, 0.007235890, 0.016731017, 0.004109589) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.mural <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.mural)  #  p-value = 0.1124
+
+#endothelial---
+group1 <- c(0.028135991, 0.018592297, 0.017913593,0.013412817) #tils
+group2 <- c(0.021186441, 0.013024602, 0.024453024, 0.008219178) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.endo <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.endo)  #  p-value =0.665
+
+#astros
+group1 <- c(0.283704572, 0.261620186, 0.221285564,0.189269747) #tils
+group2 <- c(0.209745763, 0.293777135, 0.199485199, 0.313698630) #no tils
+
+#  Mann-Whitney U Test
+wilcox_test.astro <- wilcox.test(group1, group2, exact = FALSE)
+ 
+# Output
+print(wilcox_test.astro) # p-value = 0.665
+
+#new anno level 4
+
+# Assuming 'tils' is your Seurat object
+# Extract metadata
+tils.meta <- tils@meta.data
+
+# Create a contingency table
+contingency_table<- table(tils.meta$orig.ident, tils.meta$subcluster.labels.anno4)
+
+# Calculate the proportions
+proportions <- prop.table(contingency_table , margin = 1) # margin = 1 ensures proportions are calculated within each orig.ident group
+
+#OPC-like
+# Split the data by condition
+
+group1 <- c(0.097303634, 0.096945551, 0.068493151,0.057377049) #tils
+group2 <- c(0.120762712, 0.167872648, 0.154440154, 0.161643836) #no tils
+
+# Perform the Mann-Whitney-Wilcoxon Test
+wilcox.test(group1, group2, alternative = "two.sided") #p-value = 0.02857
+
+# Display the result
+print(wilcox_test_result)
+
+#AC-like
+# Split the data by condition
+
+group1 <- c(0.135990621, 0.282868526, 0.199157007,0.311475410) #tils
+group2 <- c(0.233050847, 0.264833575, 0.263835264, 0.313698630) #no tils
+
+# Perform the Mann-Whitney-Wilcoxon Test
+wilcox.test(group1, group2, alternative = "two.sided") #p-value = 0.6857
+
+
+#AC-like Prolif
+# Split the data by condition
+
+group1 <- c(0.053927315, 0.053120850, 0.025289779,0.057377049) #tils
+group2 <- c(0.042372881, 0.007235890, 0.033462033, 0.005479452) #no tils
+
+# Perform the Mann-Whitney-Wilcoxon Test
+wilcox.test(group1, group2, alternative = "two.sided") #p-value = 0.1143
+
+#MES-like hypoxia/MHC
+group1 <- c(0.044548652, 0.073041169, 0.079030558,0.102086438) #tils
+group2 <- c(0.082627119, 0.015918958, 0.153153153, 0.002739726) #no tils
+
+# Perform the Mann-Whitney-Wilcoxon Test
+wilcox.test(group1, group2, alternative = "two.sided") #p-value = 0.8857
+
+#Mono anti-infl
+group1 <- c(0.045720985, 0.098273572, 0.271865121,0.052160954) #tils
+group2 <- c(0.033898305, 0.023154848, 0.056628057, 0.106849315) #no tils
+
+# Perform the Mann-Whitney-Wilcoxon Test
+wilcox.test(group1, group2, alternative = "two.sided") #p-value = 0.4857
+
+
+
+
+
+
+
+```
+#Other way of calculating Cell Composition using a Chi Square Test
+- used for categorical variables
+
+(Not using now but could try DCATS method later
+paper: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-023-02980-3
+vignette: https://www.bioconductor.org/packages/release/bioc/vignettes/DCATS/inst/doc/Intro_to_DCATS.html
+--> paper says that t test is not always applicable for calculating cell comp)
+```{r}
+tils <- readRDS("/data/khasrawlab/elo8/newTILs-jan27/tils.annotated.resave")
+
+
+tils <- saveRDS(tils,"/data/khasrawlab/elo8/newTILs-jan27/tils.annotated.renamed")
+
+
+
+annotation.colors <- c("Astrocyte"="royalblue1", 
+                       "Endothelial"="red",
+                       "Mural cell" = "orange2",
+                       "CD4/CD8"="yellow3",
+                       "Tumor (AC-like)"="blue",
+                       "Tumor (OPC-like)"="aquamarine",
+                       "Tumor (NPC-like)"="darkblue",
+                       "Tumor (MES-like)" = "turquoise4",
+                       "TAM-BDM (IS/PI)" = "violet",
+                       "TAM-MG (PI)" = "lightpink",
+                       "Monocyte" = "deeppink1",
+                       "Mast" = "slateblue2",
+                       "Oligodendrocyte" = "forestgreen",
+                       "OPC" = "darkseagreen3",
+                       "Neuron" = "purple3")
+
+```
+
+
+```
+```{r}
+
+```
+
+
+#Plotting UMAPs
+```{r}
+
+#UMAP of annotated tils separated by TIL condition
+
+#change labeling to look more consistent with Anna's
+tils$subcluster.labels[tils$subcluster.labels == "TAM-BDM"] <- "TAM-BDM (IS/PI)"
+tils$subcluster.labels[tils$subcluster.labels == "TAM-MG"] <- "TAM-MG (PI)"
+tils$subcluster.labels[tils$subcluster.labels == "Mono"] <- "Monocyte"
+tils$subcluster.labels[tils$subcluster.labels == "AC-like"] <- "Tumor (AC-like)"
+tils$subcluster.labels[tils$subcluster.labels == "MES-like"] <- "Tumor (MES-like)"
+tils$subcluster.labels[tils$subcluster.labels == "NPC-like"] <- "Tumor (NPC-like)"
+tils$subcluster.labels[tils$subcluster.labels == "OPC-like"] <- "Tumor (OPC-like)"
+
+
+tils$cluster.celltypes <- factor(tils$subcluster.labels, levels = c("Mural cell", "Endothelial", "CD4/CD8", "Neuron", "Oligodendrocyte", "OPC", "Astrocyte", "Tumor (AC-like)", "Tumor (MES-like)", "Tumor (NPC-like)", "Tumor (OPC-like)", "TAM-BDM (IS/PI)","TAM-MG (PI)","Monocyte"))
+
+tils$condition <- recode(tils$condition, 
+                                       "TIL with IL2" = "TIL+", 
+                                       "no TILs" = "TIL-")
+tils$condition <- factor(tils$condition, levels = c("TIL+", "TIL-"))
+
+annotation.colors <- c("Astrocyte"="royalblue1", 
+                       "Endothelial"="red",
+                       "Mural cell" = "orange2",
+                       "CD4/CD8"="yellow3",
+                       "Tumor (AC-like)"="blue",
+                       "Tumor (OPC-like)"="aquamarine",
+                       "Tumor (NPC-like)"="darkblue",
+                       "Tumor (MES-like)" = "turquoise4",
+                       "TAM-BDM (IS/PI)" = "violet",
+                       "TAM-MG (PI)" = "lightpink",
+                       "Monocyte" = "deeppink1",
+                       "Mast" = "slateblue2",
+                       "Oligodendrocyte" = "forestgreen",
+                       "OPC" = "darkseagreen3",
+                       "Neuron" = "purple3")
+
+
+
+tils.umap <- DimPlot(tils, reduction = "umap.integrated", split.by = "condition", 
+                             group.by = c("cluster.celltypes"), ncol = 2) + theme_minimal() + 
+theme_minimal() + scale_color_manual(values = annotation.colors)+ theme(
+    legend.text = element_text(size = 10, face = "bold"),
+    strip.text = element_text(size = 12, face = "bold"),
+    plot.title = element_blank()
+    )
+    
+
+
+tils.umap
+ggsave("bestUMAPdarkyellow.png", plot = tils.umap, width = 6.78, height = 3.16, dpi = 600)
+ggsave("UMAPforLegend.png", plot = tils.umap, width = 7.27, height = 4.70, dpi = 600)
+ggsave("newestUMAPgreyback.png", plot = tils.umap, width = 7.27, height = 4.70, dpi = 600)
+
+tils.umap <- DimPlot(tils, reduction = "umap.integrated", split.by = "condition", 
+                     group.by = c("subcluster.labels"), ncol = 2, label = TRUE, repel = TRUE) +
+  ggtitle("Merged UMAPs based on TIL production") + 
+  theme_minimal() + 
+  labs(color = "Cell Type") + 
+  theme(plot.background = element_rect(fill = "grey95", color = NA)) +
+  theme(
+    text = element_text(color = "black"), 
+    plot.title = element_text(hjust = 0.5),
+    legend.text = element_text(size = 10, face = "bold"),
+    legend.title =NULL) +
+  guides(color = guide_legend(override.aes = list(size = 4)))
+
+tils.umap + scale_color_manual(values = annotation.colors)
+
+#all UMAPs separately
+tils.ind.umap <- DimPlot(tils, reduction = "umap.integrated", split.by = "orig.ident", group.by = c("cluster.celltypes"), ncol= 4,label = FALSE) + theme_minimal() + theme_minimal() + scale_color_manual(values = annotation.colors) #+ theme(text = element_text(face = "bold"))
+
+ #if 2 rows                    
+tils.ind.umap$data$orig.ident <- factor(x = tils.ind.umap$data$orig.ident, levels = c("23-0227", "23-0257", "23-0153", "22-0189", "23-0258","23-0021", "23-0264","22-0160"))
+
+#if one line
+tils.ind.umap$data$orig.ident <- factor(x = tils.ind.umap$data$orig.ident, levels = c("23-0227", "23-0257", "23-0153", "22-0189","23-0258","23-0021", "23-0264", "22-0160" ))
+
+
+tils.ind.umap
+
+ggsave("IndividualUMAPs.png", plot = tils.ind.umap, width = 13.59, height = 2.90, dpi = 600)
+
+```
+
+###Individual UMAPS for each sample
+```{r}
+#UMAP for each sample individually
+
+
+til1 <- subset(tils, orig.ident=="23-0227")
+umap.til1 <- DimPlot(til1, reduction = "umap.integrated", group.by = c("subcluster.labels"), pt.size = 1.0)  +
+  ggtitle("UMAP of Sample 23-0227") + scale_color_manual(values=annotation.colors) + theme_minimal()
+
+umap.til1
+
+til7 <- subset(tils, orig.ident=="23-0257")
+umap.til7 <- DimPlot(til7, reduction = "umap.integrated", group.by = c("subcluster.labels"), pt.size = 1.0)  +
+  ggtitle("UMAP of Sample 23-0257") + scale_color_manual(values=annotation.colors) + theme_minimal()
+umap.til7
+
+til9 <- subset(tils, orig.ident=="23-0153")
+umap.til9 <- DimPlot(til9, reduction = "umap.integrated", group.by = c("subcluster.labels"), pt.size = 1.0)  +
+  ggtitle("UMAP of Sample 23-0217") + scale_color_manual(values=annotation.colors) + theme_minimal()
+
+umap.til9 
+
+
+til12 <- subset(tils, orig.ident=="22-0189")
+umap.til12 <- DimPlot(til12, reduction = "umap.integrated", group.by = c("subcluster.labels"), pt.size = 1.0)  +
+              ggtitle("UMAP of Sample 22-0189") + scale_color_manual(values=annotation.colors) + theme_minimal() 
+
+umap.til12 
+
+
+
+#23-0258","23-0021", "23-0264",="22-0160"
+
+til3 <- subset(tils, orig.ident=="23-0258")
+umap.til3 <- DimPlot(til3, reduction = "umap.integrated", group.by = c("subcluster.labels"), pt.size = 1.0)  +
+  ggtitle("UMAP of Sample 23-0258") + scale_color_manual(values=annotation.colors) + theme_minimal()
+
+umap.til3
+
+til5 <- subset(tils, orig.ident=="23-0021")
+umap.til5 <- DimPlot(til5, reduction = "umap.integrated", group.by = c("subcluster.labels"), pt.size = 1.0)  +
+  ggtitle("UMAP of Sample 23-0021") + scale_color_manual(values=annotation.colors) + theme_minimal()
+
+umap.til5
+
+til8 <- subset(tils, orig.ident=="23-0264")
+umap.til8 <- DimPlot(til8, reduction = "umap.integrated", group.by = c("subcluster.labels"), pt.size = 1.0)  +
+  ggtitle("UMAP of Sample 23-0264") + scale_color_manual(values=annotation.colors) + theme_minimal() 
+
+umap.til8
+
+til10 <- subset(tils, orig.ident=="22-0160")
+umap.til10 <- DimPlot(til10, reduction = "umap.integrated", group.by = c("subcluster.labels"), pt.size = 1.0)  +
+  ggtitle("UMAP of Sample 22-0160") + scale_color_manual(values=annotation.colors) + theme_minimal()
+umap.til10
+
+
+```
+
+#Validate Single R annotations manually 
+```{r}
+Idents(tils) <- "subcluster2.labels"
+#AC-like DEGs
+aclike.degs <- FindMarkers(tils, ident.1 = "AC-like",ident.2 = NULL, test.use = "wilcox")
+aclike.degs <- aclike.degs[aclike.degs[, "p_val_adj"] <= 0.05, ]
+aclike.degs <- cbind(aclike.degs, expression = ifelse(aclike.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+aclike.degs <- aclike.degs[order(aclike.degs[, "expression"], aclike.degs[, "p_val_adj"]), ]
+write.csv(aclike.degs, file = "aclike_degs.csv", row.names = TRUE)
+
+#Astrocyte DEGs
+astro.degs <- FindMarkers(tils, ident.1 = "Astrocyte",ident.2 = NULL, test.use = "wilcox")
+astro.degs <- astro.degs[astro.degs[, "p_val_adj"] <= 0.05, ]
+astro.degs <- cbind(astro.degs, expression = ifelse(astro.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+astro.degs <- astro.degs[order(astro.degs[, "expression"], astro.degs[, "p_val_adj"]), ]
+write.csv(astro.degs, file = "astro_degs.csv", row.names = TRUE)
+
+#CD4/CD8 DEGs
+cd4cd8.degs <- FindMarkers(tils, ident.1 = "CD4/CD8",ident.2 = NULL, test.use = "wilcox")
+cd4cd8.degs <- cd4cd8.degs[cd4cd8.degs[, "p_val_adj"] <= 0.05, ]
+cd4cd8.degs <- cbind(cd4cd8.degs, expression = ifelse(cd4cd8.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+cd4cd8.degs <- cd4cd8.degs[order(cd4cd8.degs[, "expression"], cd4cd8.degs[, "p_val_adj"]), ]
+write.csv(cd4cd8.degs, file = "cd4cd8_degs.csv", row.names = TRUE)
+
+#Endothelial DEGs
+endo.degs <- FindMarkers(tils, ident.1 = "Endothelial",ident.2 = NULL, test.use = "wilcox")
+endo.degs <- endo.degs[endo.degs[, "p_val_adj"] <= 0.05, ]
+endo.degs <- cbind(endo.degs, expression = ifelse(endo.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+endo.degs <- endo.degs[order(endo.degs[, "expression"], endo.degs[, "p_val_adj"]), ]
+write.csv(endo.degs, file = "endo_degs.csv", row.names = TRUE)
+
+#MES-like DEGs
+meslike.degs <- FindMarkers(tils, ident.1 = "MES-like",ident.2 = NULL, test.use = "wilcox")
+meslike.degs <- meslike.degs[meslike.degs[, "p_val_adj"] <= 0.05, ]
+meslike.degs <- cbind(meslike.degs, expression = ifelse(meslike.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+meslike.degs <- meslike.degs[order(meslike.degs[, "expression"], meslike.degs[, "p_val_adj"]), ]
+write.csv(meslike.degs, file = "meslike_degs.csv", row.names = TRUE)
+
+#Mono DEGs
+mono.degs <- FindMarkers(tils, ident.1 = "Mono",ident.2 = NULL, test.use = "wilcox")
+
+mono.degs <- mono.degs[mono.degs[, "p_val_adj"] <= 0.05, ]
+mono.degs <- cbind(mono.degs, expression = ifelse(mono.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+mono.degs <- mono.degs[order(mono.degs[, "expression"], mono.degs[, "p_val_adj"]), ]
+write.csv(mono.degs, file = "mono_degs.csv", row.names = TRUE)
+
+#Mural DEGs
+mural.degs <- FindMarkers(tils, ident.1 = "Mural cell",ident.2 = NULL, test.use = "wilcox")
+mural.degs <- mural.degs[mural.degs[, "p_val_adj"] <= 0.05, ]
+mural.degs <- cbind(mural.degs, expression = ifelse(mural.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+mural.degs <- mural.degs[order(mural.degs[, "expression"], mural.degs[, "p_val_adj"]), ]
+write.csv(mural.degs, file = "mural_degs.csv", row.names = TRUE)
+
+#Neuron DEGs
+neuron.degs <- FindMarkers(tils, ident.1 = "Neuron",ident.2 = NULL, test.use = "wilcox")
+neuron.degs <- neuron.degs[neuron.degs[, "p_val_adj"] <= 0.05, ]
+neuron.degs <- cbind(neuron.degs, expression = ifelse(neuron.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+neuron.degs <- neuron.degs[order(neuron.degs[, "expression"], neuron.degs[, "p_val_adj"]), ]
+write.csv(neuron.degs, file = "neuron_degs.csv", row.names = TRUE)
+
+
+#NPC-like DEGs
+npclike.degs <- FindMarkers(tils, ident.1 = "NPC-like",ident.2 = NULL, test.use = "wilcox")
+npclike.degs <- npclike.degs[npclike.degs[, "p_val_adj"] <= 0.05, ]
+npclike.degs <- cbind(npclike.degs, expression = ifelse(npclike.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+npclike.degs <- npclike.degs[order(npclike.degs[, "expression"], npclike.degs[, "p_val_adj"]), ]
+write.csv(npclike.degs, file = "npclike_degs.csv", row.names = TRUE)
+
+#Oligodendrocyte DEGs
+oligo.degs <- FindMarkers(tils, ident.1 = "Oligodendrocyte",ident.2 = NULL, test.use = "wilcox")
+oligo.degs <- oligo.degs[oligo.degs[, "p_val_adj"] <= 0.05, ]
+oligo.degs <- cbind(oligo.degs, expression = ifelse(oligo.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+oligo.degs <- oligo.degs[order(oligo.degs[, "expression"], oligo.degs[, "p_val_adj"]), ]
+write.csv(oligo.degs, file = "oligo_degs.csv", row.names = TRUE)
+
+#OPC degs
+opc.degs <- FindMarkers(tils, ident.1 = "OPC",ident.2 = NULL, test.use = "wilcox")
+opc.degs <- opc.degs[opc.degs[, "p_val_adj"] <= 0.05, ]
+opc.degs <- cbind(opc.degs, expression = ifelse(opc.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+opc.degs <- opc.degs[order(opc.degs[, "expression"], opc.degs[, "p_val_adj"]), ]
+write.csv(opc.degs, file = "opc_degs.csv", row.names = TRUE)
+
+#OPC-like DEGs
+opclike.degs <- FindMarkers(tils, ident.1 = "OPC-like",ident.2 = NULL, test.use = "wilcox")
+opclike.degs <- opclike.degs[opclike.degs[, "p_val_adj"] <= 0.05, ]
+opclike.degs <- cbind(opclike.degs, expression = ifelse(opclike.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+opclike.degs <- opclike.degs[order(opclike.degs[, "expression"], opclike.degs[, "p_val_adj"]), ]
+write.csv(opclike.degs, file = "opclike_degs.csv", row.names = TRUE)
+
+opclike.degs <- FindMarkers(tils, ident.1 = "OPC-like",ident.2 = NULL, test.use = "wilcox")
+opclike.degs <- opclike.degs[opclike.degs[, "p_val_adj"] <= 0.05, ]
+opclike.degs <- cbind(opclike.degs, expression = ifelse(opclike.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+opclike.degs <- opclike.degs[order(opclike.degs[, "expression"], opclike.degs[, "p_val_adj"]), ]
+write.csv(opclike.degs, file = "opclike_degs.csv", row.names = TRUE)
+
+#TAM-BDM DEGs
+tambdm.degs <- FindMarkers(tils, ident.1 = "TAM-BDM",ident.2 = NULL, test.use = "wilcox")
+tambdm.degs <- tambdm.degs[tambdm.degs[, "p_val_adj"] <= 0.05, ]
+tambdm.degs <- cbind(tambdm.degs, expression = ifelse(tambdm.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+tambdm.degs <- tambdm.degs[order(tambdm.degs[, "expression"], tambdm.degs[, "p_val_adj"]), ]
+write.csv(tambdm.degs, file = "tamBDM_degs.csv", row.names = TRUE)
+
+#TAM-MG DEGs
+tammg.degs <- FindMarkers(tils, ident.1 = "TAM-MG",ident.2 = NULL, test.use = "wilcox")
+tammg.degs <- tammg.degs[tammg.degs[, "p_val_adj"] <= 0.05, ]
+tammg.degs <- cbind(tammg.degs, expression = ifelse(tammg.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+tammg.degs <- tammg.degs[order(tammg.degs[, "expression"], tammg.degs[, "p_val_adj"]), ]
+write.csv(tammg.degs, file = "tamMG_degs.csv", row.names = TRUE)
+```
+
+
+#Validate Single R annotations on level 4
+
+```{r}
+Idents(tils) <- "subcluster.labels.anno4"
+#AC-like DEGs
+aclike.degs <- FindMarkers(tils, ident.1 = "AC-like",ident.2 = NULL, test.use = "wilcox")
+aclike.degs <- aclike.degs[aclike.degs[, "p_val_adj"] <= 0.05, ]
+aclike.degs <- cbind(aclike.degs, expression = ifelse(aclike.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+aclike.degs <- aclike.degs[order(aclike.degs[, "expression"], aclike.degs[, "p_val_adj"]), ]
+write.csv(aclike.degs, file = "tils-anno4-markers/aclike_degs.csv", row.names = TRUE)
+
+#AC-like Prolif DEGs
+aclike.prolif.degs <- FindMarkers(tils, ident.1 = "AC-like Prolif",ident.2 = NULL, test.use = "wilcox")
+aclike.prolif.degs <- aclike.prolif.degs[aclike.prolif.degs[, "p_val_adj"] <= 0.05, ]
+aclike.prolif.degs <- cbind(aclike.prolif.degs, expression = ifelse(aclike.prolif.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+aclike.prolif.degs <- aclike.prolif.degs[order(aclike.prolif.degs[, "expression"], aclike.prolif.degs[, "p_val_adj"]), ]
+write.csv(aclike.prolif.degs, file = "tils-anno4-markers/aclikeprolif_degs.csv", row.names = TRUE)
+
+#Astrocyte DEGs
+astro.degs <- FindMarkers(tils, ident.1 = "Astrocyte",ident.2 = NULL, test.use = "wilcox")
+astro.degs <- astro.degs[astro.degs[, "p_val_adj"] <= 0.05, ]
+astro.degs <- cbind(astro.degs, expression = ifelse(astro.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+astro.degs <- astro.degs[order(astro.degs[, "expression"], astro.degs[, "p_val_adj"]), ]
+write.csv(astro.degs, file = "tils-anno4-markers/astro_degs.csv", row.names = TRUE)
+
+#CD8 EM DEGs
+cd8EM.degs <- FindMarkers(tils, ident.1 = "CD8 EM",ident.2 = NULL, test.use = "wilcox")
+cd8EM.degs <- cd8EM.degs[cd8EM.degs[, "p_val_adj"] <= 0.05, ]
+cd8EM.degs <- cbind(cd8EM.degs, expression = ifelse(cd8EM.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+cd8EM.degs <- cd8EM.degs[order(cd8EM.degs[, "expression"], cd8EM.degs[, "p_val_adj"]), ]
+write.csv(cd8EM.degs, file = "tils-anno4-markers/cd8EM_degs.csv", row.names = TRUE)
+
+#Endo capilar DEGs
+endo.cap.degs <- FindMarkers(tils, ident.1 = "Endo capilar",ident.2 = NULL, test.use = "wilcox")
+endo.cap.degs <- endo.cap.degs[endo.cap.degs[, "p_val_adj"] <= 0.05, ]
+endo.cap.degs <- cbind(endo.cap.degs, expression = ifelse(endo.cap.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+endo.cap.degs <- endo.cap.degs[order(endo.cap.degs[, "expression"], endo.cap.degs[, "p_val_adj"]), ]
+write.csv(endo.cap.degs, file = "tils-anno4-markers/endo.cap_degs.csv", row.names = TRUE)
+
+#MES-like hypoxia/MHC DEGs
+meslike.degs <- FindMarkers(tils, ident.1 = "MES-like hypoxia/MHC",ident.2 = NULL, test.use = "wilcox")
+meslike.degs <- meslike.degs[meslike.degs[, "p_val_adj"] <= 0.05, ]
+meslike.degs <- cbind(meslike.degs, expression = ifelse(meslike.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+meslike.degs <- meslike.degs[order(meslike.degs[, "expression"], meslike.degs[, "p_val_adj"]), ]
+write.csv(meslike.degs, file = "tils-anno4-markers/meslike_degs.csv", row.names = TRUE)
+
+#Mono ant-infl DEGs
+mono.degs <- FindMarkers(tils, ident.1 = "Mono anti-infl",ident.2 = NULL, test.use = "wilcox")
+
+mono.degs <- mono.degs[mono.degs[, "p_val_adj"] <= 0.05, ]
+mono.degs <- cbind(mono.degs, expression = ifelse(mono.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+mono.degs <- mono.degs[order(mono.degs[, "expression"], mono.degs[, "p_val_adj"]), ]
+write.csv(mono.degs, file = "tils-anno4-markers/mono_degs.csv", row.names = TRUE)
+
+
+#Neuron DEGs
+neuron.degs <- FindMarkers(tils, ident.1 = "Neuron",ident.2 = NULL, test.use = "wilcox")
+neuron.degs <- neuron.degs[neuron.degs[, "p_val_adj"] <= 0.05, ]
+neuron.degs <- cbind(neuron.degs, expression = ifelse(neuron.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+neuron.degs <- neuron.degs[order(neuron.degs[, "expression"], neuron.degs[, "p_val_adj"]), ]
+write.csv(neuron.degs, file = "tils-anno4-markers/neuron_degs.csv", row.names = TRUE)
+
+
+#NPC-like neural DEGs
+npclike.degs <- FindMarkers(tils, ident.1 = "NPC-like neural",ident.2 = NULL, test.use = "wilcox")
+npclike.degs <- npclike.degs[npclike.degs[, "p_val_adj"] <= 0.05, ]
+npclike.degs <- cbind(npclike.degs, expression = ifelse(npclike.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+npclike.degs <- npclike.degs[order(npclike.degs[, "expression"], npclike.degs[, "p_val_adj"]), ]
+write.csv(npclike.degs, file = "tils-anno4-markers/npclike_degs.csv", row.names = TRUE)
+
+
+#NPC-like Prolif DEGs
+npclike.prolif.degs <- FindMarkers(tils, ident.1 = "NPC-like Prolif",ident.2 = NULL, test.use = "wilcox")
+npclike.prolif.degs <- npclike.prolif.degs[npclike.prolif.degs[, "p_val_adj"] <= 0.05, ]
+npclike.prolif.degs <- cbind(npclike.prolif.degs, expression = ifelse(npclike.prolif.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+npclike.prolif.degs <- npclike.prolif.degs[order(npclike.prolif.degs[, "expression"], npclike.prolif.degs[, "p_val_adj"]), ]
+write.csv(npclike.prolif.degs, file = "tils-anno4-markers/npclike_prolif_degs.csv", row.names = TRUE)
+
+#Oligodendrocyte DEGs
+oligo.degs <- FindMarkers(tils, ident.1 = "Oligodendrocyte",ident.2 = NULL, test.use = "wilcox")
+oligo.degs <- oligo.degs[oligo.degs[, "p_val_adj"] <= 0.05, ]
+oligo.degs <- cbind(oligo.degs, expression = ifelse(oligo.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+oligo.degs <- oligo.degs[order(oligo.degs[, "expression"], oligo.degs[, "p_val_adj"]), ]
+write.csv(oligo.degs, file = "tils-anno4-markers/oligo_degs.csv", row.names = TRUE)
+
+#OPC degs
+opc.degs <- FindMarkers(tils, ident.1 = "OPC",ident.2 = NULL, test.use = "wilcox")
+opc.degs <- opc.degs[opc.degs[, "p_val_adj"] <= 0.05, ]
+opc.degs <- cbind(opc.degs, expression = ifelse(opc.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+opc.degs <- opc.degs[order(opc.degs[, "expression"], opc.degs[, "p_val_adj"]), ]
+write.csv(opc.degs, file = "tils-anno4-markers/opc_degs.csv", row.names = TRUE)
+
+#OPC-like DEGs
+opclike.degs <- FindMarkers(tils, ident.1 = "OPC-like",ident.2 = NULL, test.use = "wilcox")
+opclike.degs <- opclike.degs[opclike.degs[, "p_val_adj"] <= 0.05, ]
+opclike.degs <- cbind(opclike.degs, expression = ifelse(opclike.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+opclike.degs <- opclike.degs[order(opclike.degs[, "expression"], opclike.degs[, "p_val_adj"]), ]
+write.csv(opclike.degs, file = "tils-anno4-markers/opclike_degs.csv", row.names = TRUE)
+
+opclike.degs <- FindMarkers(tils, ident.1 = "OPC-like",ident.2 = NULL, test.use = "wilcox")
+opclike.degs <- opclike.degs[opclike.degs[, "p_val_adj"] <= 0.05, ]
+opclike.degs <- cbind(opclike.degs, expression = ifelse(opclike.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+opclike.degs <- opclike.degs[order(opclike.degs[, "expression"], opclike.degs[, "p_val_adj"]), ]
+write.csv(opclike.degs, file = "tils-anno4-markers/opclike_degs.csv", row.names = TRUE)
+
+#Perivascular fibroblast DEGs
+fibro.degs <- FindMarkers(tils, ident.1 = "Perivascular fibroblast",ident.2 = NULL, test.use = "wilcox")
+fibro.degs <- fibro.degs[fibro.degs[, "p_val_adj"] <= 0.05, ]
+fibro.degs <- cbind(fibro.degs, expression = ifelse(fibro.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+fibro.degs <- fibro.degs[order(fibro.degs[, "expression"], fibro.degs[, "p_val_adj"]), ]
+write.csv(fibro.degs, file = "tils-anno4-markers/fibro_degs.csv", row.names = TRUE)
+
+#SMC degs
+smc.degs <- FindMarkers(tils, ident.1 = "SMC",ident.2 = NULL, test.use = "wilcox")
+smc.degs <- smc.degs[smc.degs[, "p_val_adj"] <= 0.05, ]
+smc.degs <- cbind(smc.degs, expression = ifelse(smc.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+smc.degs <- smc.degs[order(smc.degs[, "expression"], smc.degs[, "p_val_adj"]), ]
+write.csv(smc.degs, file = "tils-anno4-markers/smc_degs.csv", row.names = TRUE)
+
+#TAM-MG aging sig DEGs
+tammg.degs <- FindMarkers(tils, ident.1 = "TAM-MG aging sig",ident.2 = NULL, test.use = "wilcox")
+tammg.degs <- tammg.degs[tammg.degs[, "p_val_adj"] <= 0.05, ]
+tammg.degs <- cbind(tammg.degs, expression = ifelse(tammg.degs[, "avg_log2FC"] > 0, "upReg", "downReg"))
+# Order the matrix by "expression" and then by "p_val_adj"
+tammg.degs <- tammg.degs[order(tammg.degs[, "expression"], tammg.degs[, "p_val_adj"]), ]
+write.csv(tammg.degs, file = "tils-anno4-markers/tamMG_degs.csv", row.names = TRUE)
+```
+
+
+
+
+
+#EdgeR: DEG analysis across TIL condition
+EdgeR for single cells vignette: https://www.bioconductor.org/packages/devel/bioc/vignettes/Glimma/inst/doc/single_cell_edger.html
+
+```{r}
+library(edgeR)
+library(SingleCellExperiment)
+library(scRNAseq)
+library(scater)
+library(scran)
+library(Glimma)
+
+merged.tils <- AggregateExpression(tils, return.seurat = T, slot = "counts", assays = "RNA", group.by = c("orig.ident", 
+                                                                                                                 "condition"))
+
+tils.sce <- as.SingleCellExperiment(merged.tils)
+tils.sce <- logNormCounts(tils.sce)
+var_mod <- modelGeneVar(tils.sce)
+hvg_genes <- getTopHVGs(var_mod, n=500)
+
+hvg.tils <- tils.sce[hvg_genes,]
+hvg.tils <- logNormCounts(hvg.tils)
+
+colData(tils.sce)$sample.tils <-
+  paste0(colData(tils.sce)$orig.ident,
+         "_",
+         colData(tils.sce)$condition)
+
+tils.counts <- counts(tils.sce)
+pb.counts <- t(rowsum(t(tils.counts), colData(tils.sce)$sample.tils))
+
+pb.samples <- colnames(pb.counts)
+#pb.samples <- gsub("22-0160_no TILs", "22-0160-no TILs", pb.samples)
+pb.split <- do.call(rbind, strsplit(pb.samples, "_"))
+
+pb.samples.anno <- data.frame(
+  sample = pb.samples,
+  sample.origin = pb.split[,1],
+  til.status = pb.split[,2]
+)
+
+pb.dge <- DGEList(
+  counts = pb.counts,
+  samples = pb.samples.anno,
+  group= pb.samples.anno$til.status
+  
+)
+
+pb.dge <- calcNormFactors(pb.dge)
+
+
+design <- model.matrix(~0 + til.status, data = pb.dge$samples)
+colnames(design) <- make.names(gsub("til.status", "", colnames(design)))
+
+pb.dge <- estimateDisp(pb.dge, design)
+
+contr <- makeContrasts(TIL.with.IL2 - no.TILs, levels = design)
+
+
+
+pb.fit <- glmFit(pb.dge, design)
+
+pb.lrt <- glmLRT(pb.fit, contrast = contr)
+
+
+glimmaMA(pb.lrt, dge= pb.dge)
+
+
+top.genes.bycondition <- topTags(pb.lrt, n = 20)
+print(top.genes.bycondition)
+```
+
+
+#EdgeR per cell type across condition
+```{r}
+tils$condition <- recode(tils$condition, 
+                                       "TIL+" = "TIL with IL2", 
+                                       "TIL-"="no TILs")
+merged.tils <- AggregateExpression(tils, return.seurat = T, slot = "counts", assays = "RNA", group.by = c("condition", "subcluster.labels", "orig.ident"))
+
+
+Idents(tils) <- "subcluster.labels"
+tils.aclike <- subset(tils, subset=subcluster.labels == "AC-like")
+tils.astro <- subset(tils, subset=subcluster.labels=="Astrocyte")
+tils.endothelial <- subset(tils, subset=subcluster.labels=="Endothelial")
+tils.TAM.BDM <- subset(tils, subset=subcluster.labels=="TAM-BDM")
+tils.TAM.MG <- subset(tils, subset=subcluster.labels=="TAM-MG")
+tils.cd4cd8 <- subset(tils, subset=subcluster.labels=="CD4/CD8")
+tils.mural <- subset(tils, subset=subcluster.labels=="Mural cell")
+tils.neuron <- subset(tils, subset=subcluster.labels=="Neuron")
+tils.oligo <- subset(tils, subset=subcluster.labels=="Oligodendrocyte")
+tils.preoligo <- subset(tils, subset=subcluster.labels=="OPC")
+tils.opclike <- subset(tils, subset=subcluster.labels=="OPC-like")
+tils.npclike <- subset(tils, subset=subcluster.labels=="NPC-like")
+tils.meslike <- subset(tils, subset=subcluster.labels=="MES-like")
+tils.mono <- subset(tils, subset=subcluster.labels=="Mono")
+
+#think there aren't plasma & radial cells identified in both conditions
+#pipeline for AC-like tumor cells-----
+tils.aclike.sce <- as.SingleCellExperiment(tils.aclike)
+tils.aclike.sce <- logNormCounts(tils.aclike.sce)
+
+var.mod.aclike <- modelGeneVar(tils.aclike.sce)
+hvg.genes.aclike <- getTopHVGs(var.mod.aclike, n=500)
+
+colData(tils.aclike.sce)$sample.tils <- paste0(colData(tils.aclike.sce)$orig.ident, "_", colData(tils.aclike.sce)$condition)
+tils.aclike.sce.counts <- counts(tils.aclike.sce)
+
+pb.aclike.counts <- t(rowsum(t(tils.aclike.sce.counts), colData(tils.aclike.sce)$sample.tils))
+
+pb.aclike.samples <- colnames(pb.aclike.counts)
+#pb.aclike.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_malignant\\.cell_", "", pb.tumor.samples)
+pb.aclike.split <- do.call(rbind, strsplit(pb.aclike.samples, "_"))
+
+pb.aclike.sample.anno <- data.frame(
+  sample= pb.aclike.samples,
+  cell_origin = pb.aclike.split[,1],
+  sample_group = pb.aclike.split[,2]
+)
+
+pb.aclike.dge <- DGEList(
+  counts = pb.aclike.counts,
+  samples = pb.aclike.sample.anno,
+  group = pb.aclike.sample.anno$sample_group
+)
+
+pb.aclike.dge <- calcNormFactors(pb.aclike.dge)
+
+design.aclike <- model.matrix(~0 + sample_group, data=pb.aclike.dge$samples)
+colnames(design.aclike) <- make.names(gsub("sample_group", "", colnames(design.aclike)))
+
+pb.aclike.dge <- estimateDisp(pb.aclike.dge, design.aclike)
+contr.aclike <- makeContrasts("TIL with IL2 - no TILs", levels=design.aclike)
+
+
+pb.aclike.fit <- glmFit(pb.aclike.dge, design.aclike)
+pb.aclike.lrt <- glmLRT(pb.aclike.fit, contrast=contr.aclike)
+
+glimmaMA(pb.aclike.lrt, dge=pb.aclike.dge)
+
+
+#pipeline for MES-like tumor cells-----
+tils.meslike.sce <- as.SingleCellExperiment(tils.meslike)
+tils.meslike.sce <- logNormCounts(tils.meslike.sce)
+
+var.mod.meslike <- modelGeneVar(tils.meslike.sce)
+hvg.genes.meslike <- getTopHVGs(var.mod.meslike, n=500)
+
+colData(tils.meslike.sce)$sample.tils <- paste0(colData(tils.meslike.sce)$orig.ident, "_", colData(tils.meslike.sce)$condition)
+tils.meslike.sce.counts <- counts(tils.meslike.sce)
+
+pb.meslike.counts <- t(rowsum(t(tils.meslike.sce.counts), colData(tils.meslike.sce)$sample.tils))
+
+pb.meslike.samples <- colnames(pb.meslike.counts)
+#pb.meslike.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_malignant\\.cell_", "", pb.tumor.samples)
+pb.meslike.split <- do.call(rbind, strsplit(pb.meslike.samples, "_"))
+
+pb.meslike.sample.anno <- data.frame(
+  sample= pb.meslike.samples,
+  cell_origin = pb.meslike.split[,1],
+  sample_group = pb.meslike.split[,2]
+)
+
+pb.meslike.dge <- DGEList(
+  counts = pb.meslike.counts,
+  samples = pb.meslike.sample.anno,
+  group = pb.meslike.sample.anno$sample_group
+)
+
+pb.meslike.dge <- calcNormFactors(pb.meslike.dge)
+
+design.meslike <- model.matrix(~0 + sample_group, data=pb.meslike.dge$samples)
+colnames(design.meslike) <- make.names(gsub("sample_group", "", colnames(design.meslike)))
+
+pb.meslike.dge <- estimateDisp(pb.meslike.dge, design.meslike)
+contr.meslike <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.meslike)
+
+
+pb.meslike.fit <- glmFit(pb.meslike.dge, design.meslike)
+pb.meslike.lrt <- glmLRT(pb.meslike.fit, contrast=contr.meslike)
+
+glimmaMA(pb.meslike.lrt, dge=pb.meslike.dge)
+
+#pipeline for NPC-like tumor cells-----
+tils.npclike.sce <- as.SingleCellExperiment(tils.npclike)
+tils.npclike.sce <- logNormCounts(tils.npclike.sce)
+
+var.mod.npclike <- modelGeneVar(tils.npclike.sce)
+hvg.genes.npclike <- getTopHVGs(var.mod.npclike, n=500)
+
+colData(tils.npclike.sce)$sample.tils <- paste0(colData(tils.npclike.sce)$orig.ident, "_", colData(tils.npclike.sce)$condition)
+tils.npclike.sce.counts <- counts(tils.npclike.sce)
+
+pb.npclike.counts <- t(rowsum(t(tils.npclike.sce.counts), colData(tils.npclike.sce)$sample.tils))
+
+pb.npclike.samples <- colnames(pb.npclike.counts)
+#pb.npclike.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_malignant\\.cell_", "", pb.tumor.samples)
+pb.npclike.split <- do.call(rbind, strsplit(pb.npclike.samples, "_"))
+
+pb.npclike.sample.anno <- data.frame(
+  sample= pb.npclike.samples,
+  cell_origin = pb.npclike.split[,1],
+  sample_group = pb.npclike.split[,2]
+)
+
+pb.npclike.dge <- DGEList(
+  counts = pb.npclike.counts,
+  samples = pb.npclike.sample.anno,
+  group = pb.npclike.sample.anno$sample_group
+)
+
+pb.npclike.dge <- calcNormFactors(pb.npclike.dge)
+
+design.npclike <- model.matrix(~0 + sample_group, data=pb.npclike.dge$samples)
+colnames(design.npclike) <- make.names(gsub("sample_group", "", colnames(design.npclike)))
+
+pb.npclike.dge <- estimateDisp(pb.npclike.dge, design.npclike)
+contr.npclike <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.npclike)
+
+
+pb.npclike.fit <- glmFit(pb.npclike.dge, design.npclike)
+pb.npclike.lrt <- glmLRT(pb.npclike.fit, contrast=contr.npclike)
+
+glimmaMA(pb.npclike.lrt, dge=pb.npclike.dge)
+
+#pipeline for OPC-like tumor cells-----
+tils.opclike.sce <- as.SingleCellExperiment(tils.opclike)
+tils.opclike.sce <- logNormCounts(tils.opclike.sce)
+
+var.mod.opclike <- modelGeneVar(tils.opclike.sce)
+hvg.genes.opclike <- getTopHVGs(var.mod.opclike, n=500)
+
+colData(tils.opclike.sce)$sample.tils <- paste0(colData(tils.opclike.sce)$orig.ident, "_", colData(tils.opclike.sce)$condition)
+tils.opclike.sce.counts <- counts(tils.opclike.sce)
+
+pb.opclike.counts <- t(rowsum(t(tils.opclike.sce.counts), colData(tils.opclike.sce)$sample.tils))
+
+pb.opclike.samples <- colnames(pb.opclike.counts)
+#pb.opclike.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_malignant\\.cell_", "", pb.tumor.samples)
+pb.opclike.split <- do.call(rbind, strsplit(pb.opclike.samples, "_"))
+
+pb.opclike.sample.anno <- data.frame(
+  sample= pb.opclike.samples,
+  cell_origin = pb.opclike.split[,1],
+  sample_group = pb.opclike.split[,2]
+)
+
+pb.opclike.dge <- DGEList(
+  counts = pb.opclike.counts,
+  samples = pb.opclike.sample.anno,
+  group = pb.opclike.sample.anno$sample_group
+)
+
+pb.opclike.dge <- calcNormFactors(pb.opclike.dge)
+
+design.opclike <- model.matrix(~0 + sample_group, data=pb.opclike.dge$samples)
+colnames(design.opclike) <- make.names(gsub("sample_group", "", colnames(design.opclike)))
+
+pb.opclike.dge <- estimateDisp(pb.opclike.dge, design.opclike)
+contr.opclike <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.opclike)
+
+
+pb.opclike.fit <- glmFit(pb.opclike.dge, design.opclike)
+pb.opclike.lrt <- glmLRT(pb.opclike.fit, contrast=contr.opclike)
+
+glimmaMA(pb.opclike.lrt, dge=pb.opclike.dge)
+
+#pipeline for CD4/CD8 cells----
+tils.cd4cd8.sce <- as.SingleCellExperiment(tils.cd4cd8)
+tils.cd4cd8.sce <- logNormCounts(tils.cd4cd8.sce)
+
+var.mod.cd4cd8 <- modelGeneVar(tils.cd4cd8.sce)
+hvg.genes.cd4cd8 <- getTopHVGs(var.mod.cd4cd8, n=500)
+
+colData(tils.cd4cd8.sce)$sample.tils <- paste0(colData(tils.cd4cd8.sce)$orig.ident, "_", colData(tils.cd4cd8.sce)$condition)
+tils.cd4cd8.sce.counts <- counts(tils.cd4cd8.sce)
+
+pb.cd4cd8.counts <- t(rowsum(t(tils.cd4cd8.sce.counts), colData(tils.cd4cd8.sce)$sample.tils))
+
+pb.cd4cd8.samples <- colnames(pb.cd4cd8.counts)
+#pb.cd4cd8.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_mature.T\\.cell_", "", pb.cd4cd8.samples)
+pb.cd4cd8.split <- do.call(rbind, strsplit(pb.cd4cd8.samples, "_"))
+
+pb.cd4cd8.sample.anno <- data.frame(
+  sample= pb.cd4cd8.samples,
+  cell_origin = pb.cd4cd8.split[,1],
+  sample_group = pb.cd4cd8.split[,2]
+)
+
+pb.cd4cd8.dge <- DGEList(
+  counts = pb.cd4cd8.counts,
+  samples = pb.cd4cd8.sample.anno,
+  group = pb.cd4cd8.sample.anno$sample_group
+)
+
+pb.cd4cd8.dge <- calcNormFactors(pb.cd4cd8.dge)
+
+design.cd4cd8 <- model.matrix(~0 + sample_group, data=pb.cd4cd8.dge$samples)
+colnames(design.cd4cd8) <- make.names(gsub("sample_group", "", colnames(design.cd4cd8)))
+
+pb.cd4cd8.dge <- estimateDisp(pb.cd4cd8.dge, design.cd4cd8)
+contr.cd4cd8 <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.cd4cd8)
+
+
+pb.cd4cd8.fit <- glmFit(pb.cd4cd8.dge, design.cd4cd8)
+pb.cd4cd8.lrt <- glmLRT(pb.cd4cd8.fit, contrast=contr.cd4cd8)
+
+glimmaMA(pb.cd4cd8.lrt, dge=pb.cd4cd8.dge)
+
+#pipeline for astrocytes----
+tils.astro.sce <- as.SingleCellExperiment(tils.astro)
+tils.astro.sce <- logNormCounts(tils.astro.sce)
+
+var.mod.astro <- modelGeneVar(tils.astro.sce)
+hvg.genes.astro <- getTopHVGs(var.mod.astro, n=500)
+
+colData(tils.astro.sce)$sample.tils <- paste0(colData(tils.astro.sce)$orig.ident, "_", colData(tils.astro.sce)$condition)
+tils.astro.sce.counts <- counts(tils.astro.sce)
+
+pb.astro.counts <- t(rowsum(t(tils.astro.sce.counts), colData(tils.astro.sce)$sample.tils))
+
+pb.astro.samples <- colnames(pb.astro.counts)
+pb.astro.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_astrocyte_", "", pb.astro.samples)
+pb.astro.split <- do.call(rbind, strsplit(pb.astro.samples, "_"))
+
+pb.astro.sample.anno <- data.frame(
+  sample= pb.astro.samples,
+  cell_origin = pb.astro.split[,1],
+  sample_group = pb.astro.split[,2]
+)
+
+pb.astro.dge <- DGEList(
+  counts = pb.astro.counts,
+  samples = pb.astro.sample.anno,
+  group = pb.astro.sample.anno$sample_group
+)
+
+pb.astro.dge <- calcNormFactors(pb.astro.dge)
+
+design.astro <- model.matrix(~0 + sample_group, data=pb.astro.dge$samples)
+colnames(design.astro) <- make.names(gsub("sample_group", "", colnames(design.astro)))
+
+pb.astro.dge <- estimateDisp(pb.astro.dge, design.astro)
+contr.astro <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.astro)
+
+
+pb.astro.fit <- glmFit(pb.astro.dge, design.astro)
+pb.astro.lrt <- glmLRT(pb.astro.fit, contrast=contr.astro)
+
+glimmaMA(pb.astro.lrt, dge=pb.astro.dge)
+
+
+#pipeline fot endothelial cells-----
+tils.endothelial.sce <- as.SingleCellExperiment(tils.endothelial)
+tils.endothelial.sce <- logNormCounts(tils.endothelial.sce)
+
+var.mod.endothelial <- modelGeneVar(tils.endothelial.sce)
+hvg.genes.endothelial <- getTopHVGs(var.mod.endothelial, n=500)
+
+colData(tils.endothelial.sce)$sample.tils <- paste0(colData(tils.endothelial.sce)$orig.ident, "_", colData(tils.endothelial.sce)$condition)
+tils.endothelial.sce.counts <- counts(tils.endothelial.sce)
+
+pb.endothelial.counts <- t(rowsum(t(tils.endothelial.sce.counts), colData(tils.endothelial.sce)$sample.tils))
+
+pb.endothelial.samples <- colnames(pb.endothelial.counts)
+pb.endothelial.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_endothelial.cell_", "", pb.endothelial.samples)
+pb.endothelial.split <- do.call(rbind, strsplit(pb.endothelial.samples, "_"))
+
+pb.endothelial.sample.anno <- data.frame(
+  sample= pb.endothelial.samples,
+  cell_origin = pb.endothelial.split[,1],
+  sample_group = pb.endothelial.split[,2]
+)
+
+pb.endothelial.dge <- DGEList(
+  counts = pb.endothelial.counts,
+  samples = pb.endothelial.sample.anno,
+  group = pb.endothelial.sample.anno$sample_group
+)
+
+pb.endothelial.dge <- calcNormFactors(pb.endothelial.dge)
+
+design.endothelial <- model.matrix(~0 + sample_group, data=pb.endothelial.dge$samples)
+colnames(design.endothelial) <- make.names(gsub("sample_group", "", colnames(design.endothelial)))
+
+pb.endothelial.dge <- estimateDisp(pb.endothelial.dge, design.endothelial)
+contr.endothelial <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.endothelial)
+
+
+pb.endothelial.fit <- glmFit(pb.endothelial.dge, design.endothelial)
+pb.endothelial.lrt <- glmLRT(pb.endothelial.fit, contrast=contr.endothelial)
+
+glimmaMA(pb.endothelial.lrt, dge=pb.endothelial.dge)
+#NONE FOR ENDOTHELIAL CELLS!!
+
+#pipeline for TAM.MG---
+tils.TAM.MG.sce <- as.SingleCellExperiment(tils.TAM.MG)
+tils.TAM.MG.sce <- logNormCounts(tils.TAM.MG.sce)
+
+var.mod.TAM.MG <- modelGeneVar(tils.TAM.MG.sce)
+hvg.genes.TAM.MG <- getTopHVGs(var.mod.TAM.MG, n=500)
+
+colData(tils.TAM.MG.sce)$sample.tils <- paste0(colData(tils.TAM.MG.sce)$orig.ident, "_", colData(tils.TAM.MG.sce)$condition)
+tils.TAM.MG.sce.counts <- counts(tils.TAM.MG.sce)
+
+pb.TAM.MG.counts <- t(rowsum(t(tils.TAM.MG.sce.counts), colData(tils.TAM.MG.sce)$sample.tils))
+
+pb.TAM.MG.samples <- colnames(pb.TAM.MG.counts)
+pb.TAM.MG.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_TAM.MG_", "", pb.TAM.MG.samples)
+pb.TAM.MG.split <- do.call(rbind, strsplit(pb.TAM.MG.samples, "_"))
+
+pb.TAM.MG.sample.anno <- data.frame(
+  sample= pb.TAM.MG.samples,
+  cell_origin = pb.TAM.MG.split[,1],
+  sample_group = pb.TAM.MG.split[,2]
+)
+
+pb.TAM.MG.dge <- DGEList(
+  counts = pb.TAM.MG.counts,
+  samples = pb.TAM.MG.sample.anno,
+  group = pb.TAM.MG.sample.anno$sample_group
+)
+
+pb.TAM.MG.dge <- calcNormFactors(pb.TAM.MG.dge)
+
+design.TAM.MG <- model.matrix(~0 + sample_group, data=pb.TAM.MG.dge$samples)
+colnames(design.TAM.MG) <- make.names(gsub("sample_group", "", colnames(design.TAM.MG)))
+
+pb.TAM.MG.dge <- estimateDisp(pb.TAM.MG.dge, design.TAM.MG)
+contr.TAM.MG <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.TAM.MG)
+
+
+pb.TAM.MG.fit <- glmFit(pb.TAM.MG.dge, design.TAM.MG)
+pb.TAM.MG.lrt <- glmLRT(pb.TAM.MG.fit, contrast=contr.TAM.MG)
+
+glimmaMA(pb.TAM.MG.lrt, dge=pb.TAM.MG.dge)
+
+#pipeline for TAM.BDM----
+tils.TAM.BDM.sce <- as.SingleCellExperiment(tils.TAM.BDM)
+tils.TAM.BDM.sce <- logNormCounts(tils.TAM.BDM.sce)
+
+var.mod.TAM.BDM <- modelGeneVar(tils.TAM.BDM.sce)
+hvg.genes.TAM.BDM <- getTopHVGs(var.mod.TAM.BDM, n=500)
+
+colData(tils.TAM.BDM.sce)$sample.tils <- paste0(colData(tils.TAM.BDM.sce)$orig.ident, "_", colData(tils.TAM.BDM.sce)$condition)
+tils.TAM.BDM.sce.counts <- counts(tils.TAM.BDM.sce)
+
+pb.TAM.BDM.counts <- t(rowsum(t(tils.TAM.BDM.sce.counts), colData(tils.TAM.BDM.sce)$sample.tils))
+
+pb.TAM.BDM.samples <- colnames(pb.TAM.BDM.counts)
+pb.TAM.BDM.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_TAM.BDMcyte_", "", pb.TAM.BDM.samples)
+pb.TAM.BDM.split <- do.call(rbind, strsplit(pb.TAM.BDM.samples, "_"))
+
+pb.TAM.BDM.sample.anno <- data.frame(
+  sample= pb.TAM.BDM.samples,
+  cell_origin = pb.TAM.BDM.split[,1],
+  sample_group = pb.TAM.BDM.split[,2]
+)
+
+pb.TAM.BDM.dge <- DGEList(
+  counts = pb.TAM.BDM.counts,
+  samples = pb.TAM.BDM.sample.anno,
+  group = pb.TAM.BDM.sample.anno$sample_group
+)
+
+pb.TAM.BDM.dge <- calcNormFactors(pb.TAM.BDM.dge)
+
+design.TAM.BDM <- model.matrix(~0 + sample_group, data=pb.TAM.BDM.dge$samples)
+colnames(design.TAM.BDM) <- make.names(gsub("sample_group", "", colnames(design.TAM.BDM)))
+
+pb.TAM.BDM.dge <- estimateDisp(pb.TAM.BDM.dge, design.TAM.BDM)
+contr.TAM.BDM <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.TAM.BDM)
+
+
+pb.TAM.BDM.fit <- glmFit(pb.TAM.BDM.dge, design.TAM.BDM)
+pb.TAM.BDM.lrt <- glmLRT(pb.TAM.BDM.fit, contrast=contr.TAM.BDM)
+
+glimmaMA(pb.TAM.BDM.lrt, dge=pb.TAM.BDM.dge)
+
+
+#pipeline for neuron------
+tils.neuron.sce <- as.SingleCellExperiment(tils.neuron)
+tils.neuron.sce <- logNormCounts(tils.neuron.sce)
+
+var.mod.neuron <- modelGeneVar(tils.neuron.sce)
+hvg.genes.neuron <- getTopHVGs(var.mod.neuron, n=500)
+
+colData(tils.neuron.sce)$sample.tils <- paste0(colData(tils.neuron.sce)$orig.ident, "_", colData(tils.neuron.sce)$condition)
+tils.neuron.sce.counts <- counts(tils.neuron.sce)
+
+pb.neuron.counts <- t(rowsum(t(tils.neuron.sce.counts), colData(tils.neuron.sce)$sample.tils))
+
+pb.neuron.samples <- colnames(pb.neuron.counts)
+pb.neuron.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_neuron_", "", pb.neuron.samples)
+pb.neuron.split <- do.call(rbind, strsplit(pb.neuron.samples, "_"))
+
+pb.neuron.sample.anno <- data.frame(
+  sample= pb.neuron.samples,
+  cell_origin = pb.neuron.split[,1],
+  sample_group = pb.neuron.split[,2]
+)
+
+pb.neuron.dge <- DGEList(
+  counts = pb.neuron.counts,
+  samples = pb.neuron.sample.anno,
+  group = pb.neuron.sample.anno$sample_group
+)
+
+pb.neuron.dge <- calcNormFactors(pb.neuron.dge)
+
+design.neuron <- model.matrix(~0 + sample_group, data=pb.neuron.dge$samples)
+colnames(design.neuron) <- make.names(gsub("sample_group", "", colnames(design.neuron)))
+
+pb.neuron.dge <- estimateDisp(pb.neuron.dge, design.neuron)
+contr.neuron <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.neuron)
+
+
+pb.neuron.fit <- glmFit(pb.neuron.dge, design.neuron)
+pb.neuron.lrt <- glmLRT(pb.neuron.fit, contrast=contr.neuron)
+
+glimmaMA(pb.neuron.lrt, dge=pb.neuron.dge)
+
+
+#pipeline for mural cells-----
+tils.mural.sce <- as.SingleCellExperiment(tils.mural)
+tils.mural.sce <- logNormCounts(tils.mural.sce)
+
+var.mod.mural <- modelGeneVar(tils.mural.sce)
+hvg.genes.mural <- getTopHVGs(var.mod.mural, n=500)
+
+colData(tils.mural.sce)$sample.tils <- paste0(colData(tils.mural.sce)$orig.ident, "_", colData(tils.mural.sce)$condition)
+tils.mural.sce.counts <- counts(tils.mural.sce)
+
+pb.mural.counts <- t(rowsum(t(tils.mural.sce.counts), colData(tils.mural.sce)$sample.tils))
+
+pb.mural.samples <- colnames(pb.mural.counts)
+pb.mural.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_mural.cell_", "", pb.mural.samples)
+pb.mural.split <- do.call(rbind, strsplit(pb.mural.samples, "_"))
+
+pb.mural.sample.anno <- data.frame(
+  sample= pb.mural.samples,
+  cell_origin = pb.mural.split[,1],
+  sample_group = pb.mural.split[,2]
+)
+
+pb.mural.dge <- DGEList(
+  counts = pb.mural.counts,
+  samples = pb.mural.sample.anno,
+  group = pb.mural.sample.anno$sample_group
+)
+
+pb.mural.dge <- calcNormFactors(pb.mural.dge)
+
+design.mural <- model.matrix(~0 + sample_group, data=pb.mural.dge$samples)
+colnames(design.mural) <- make.names(gsub("sample_group", "", colnames(design.mural)))
+
+pb.mural.dge <- estimateDisp(pb.mural.dge, design.mural)
+contr.mural <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.mural)
+
+
+pb.mural.fit <- glmFit(pb.mural.dge, design.mural)
+pb.mural.lrt <- glmLRT(pb.mural.fit, contrast=contr.mural)
+
+glimmaMA(pb.mural.lrt, dge=pb.mural.dge)
+#none for mural cells
+
+##pipeline for oligos-----
+tils.oligo.sce <- as.SingleCellExperiment(tils.oligo)
+tils.oligo.sce <- logNormCounts(tils.oligo.sce)
+
+var.mod.oligo <- modelGeneVar(tils.oligo.sce)
+hvg.genes.oligo <- getTopHVGs(var.mod.oligo, n=500)
+
+colData(tils.oligo.sce)$sample.tils <- paste0(colData(tils.oligo.sce)$orig.ident, "_", colData(tils.oligo.sce)$condition)
+tils.oligo.sce.counts <- counts(tils.oligo.sce)
+
+pb.oligo.counts <- t(rowsum(t(tils.oligo.sce.counts), colData(tils.oligo.sce)$sample.tils))
+
+pb.oligo.samples <- colnames(pb.oligo.counts)
+pb.oligo.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_oligodendrocyte_", "", pb.oligo.samples)
+pb.oligo.split <- do.call(rbind, strsplit(pb.oligo.samples, "_"))
+
+pb.oligo.sample.anno <- data.frame(
+  sample= pb.oligo.samples,
+  cell_origin = pb.oligo.split[,1],
+  sample_group = pb.oligo.split[,2]
+)
+
+pb.oligo.dge <- DGEList(
+  counts = pb.oligo.counts,
+  samples = pb.oligo.sample.anno,
+  group = pb.oligo.sample.anno$sample_group
+)
+
+pb.oligo.dge <- calcNormFactors(pb.oligo.dge)
+
+design.oligo <- model.matrix(~0 + sample_group, data=pb.oligo.dge$samples)
+colnames(design.oligo) <- make.names(gsub("sample_group", "", colnames(design.oligo)))
+
+pb.oligo.dge <- estimateDisp(pb.oligo.dge, design.oligo)
+contr.oligo <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.oligo)
+
+
+pb.oligo.fit <- glmFit(pb.oligo.dge, design.oligo)
+pb.oligo.lrt <- glmLRT(pb.oligo.fit, contrast=contr.oligo)
+
+glimmaMA(pb.oligo.lrt, dge=pb.oligo.dge)
+
+
+##pipeline for preoligos-----
+tils.preoligo.sce <- as.SingleCellExperiment(tils.preoligo)
+tils.preoligo.sce <- logNormCounts(tils.preoligo.sce)
+
+var.mod.preoligo <- modelGeneVar(tils.preoligo.sce)
+hvg.genes.preoligo <- getTopHVGs(var.mod.preoligo, n=500)
+
+colData(tils.preoligo.sce)$sample.tils <- paste0(colData(tils.preoligo.sce)$orig.ident, "_", colData(tils.preoligo.sce)$condition)
+tils.preoligo.sce.counts <- counts(tils.preoligo.sce)
+
+pb.preoligo.counts <- t(rowsum(t(tils.preoligo.sce.counts), colData(tils.preoligo.sce)$sample.tils))
+
+pb.preoligo.samples <- colnames(pb.preoligo.counts)
+pb.preoligo.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_oligodendrocyte.precursor.cell_", "", pb.preoligo.samples)
+pb.preoligo.split <- do.call(rbind, strsplit(pb.preoligo.samples, "_"))
+
+pb.preoligo.sample.anno <- data.frame(
+  sample= pb.preoligo.samples,
+  cell_origin = pb.preoligo.split[,1],
+  sample_group = pb.preoligo.split[,2]
+)
+
+pb.preoligo.dge <- DGEList(
+  counts = pb.preoligo.counts,
+  samples = pb.preoligo.sample.anno,
+  group = pb.preoligo.sample.anno$sample_group
+)
+
+pb.preoligo.dge <- calcNormFactors(pb.preoligo.dge)
+
+design.preoligo <- model.matrix(~0 + sample_group, data=pb.preoligo.dge$samples)
+colnames(design.preoligo) <- make.names(gsub("sample_group", "", colnames(design.preoligo)))
+
+pb.preoligo.dge <- estimateDisp(pb.preoligo.dge, design.preoligo)
+contr.preoligo <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.preoligo)
+
+
+pb.preoligo.fit <- glmFit(pb.preoligo.dge, design.preoligo)
+pb.preoligo.lrt <- glmLRT(pb.preoligo.fit, contrast=contr.preoligo)
+
+glimmaMA(pb.preoligo.lrt, dge=pb.preoligo.dge)
+
+
+#pipeline for Monocytes----
+tils.mono.sce <- as.SingleCellExperiment(tils.mono)
+tils.mono.sce <- logNormCounts(tils.mono.sce)
+
+var.mod.mono <- modelGeneVar(tils.mono.sce)
+hvg.genes.mono <- getTopHVGs(var.mod.mono, n=500)
+
+colData(tils.mono.sce)$sample.tils <- paste0(colData(tils.mono.sce)$orig.ident, "_", colData(tils.mono.sce)$condition)
+tils.mono.sce.counts <- counts(tils.mono.sce)
+
+pb.mono.counts <- t(rowsum(t(tils.mono.sce.counts), colData(tils.mono.sce)$sample.tils))
+
+pb.mono.samples <- colnames(pb.mono.counts)
+pb.mono.samples <- gsub("^(no\\.TILs|TIL\\.with\\.IL2)_monocyte_", "", pb.mono.samples)
+pb.mono.split <- do.call(rbind, strsplit(pb.mono.samples, "_"))
+
+pb.mono.sample.anno <- data.frame(
+  sample= pb.mono.samples,
+  cell_origin = pb.mono.split[,1],
+  sample_group = pb.mono.split[,2]
+)
+
+pb.mono.dge <- DGEList(
+  counts = pb.mono.counts,
+  samples = pb.mono.sample.anno,
+  group = pb.mono.sample.anno$sample_group
+)
+
+pb.mono.dge <- calcNormFactors(pb.mono.dge)
+
+design.mono <- model.matrix(~0 + sample_group, data=pb.mono.dge$samples)
+colnames(design.mono) <- make.names(gsub("sample_group", "", colnames(design.mono)))
+
+pb.mono.dge <- estimateDisp(pb.mono.dge, design.mono)
+contr.mono <- makeContrasts("TIL.with.IL2 - no.TILs", levels=design.mono)
+
+
+pb.mono.fit <- glmFit(pb.mono.dge, design.mono)
+pb.mono.lrt <- glmLRT(pb.mono.fit, contrast=contr.mono)
+
+glimmaMA(pb.mono.lrt, dge=pb.mono.dge)
+
+```
+
+
+
+
+
+#DESingle : DEG analysis across TIL condition
+https://bioconductor.org/packages/release/bioc/vignettes/DEsingle/inst/doc/DEsingle.html
+
+Outputs from DESingleRun:
+--theta_1, theta_2, mu_1, mu_2, size_1, size_2, prob_1, prob_2: MLE of the zero-inflated negative binomial distribution’s parameters of group 1 and group 2.
+--total_mean_1, total_mean_2: Mean of read counts of group 1 and group 2.
+--foldChange: total_mean_1/total_mean_2.
+--norm_total_mean_1, norm_total_mean_2: Mean of normalized read counts of group 1 and group 2.
+--norm_foldChange: norm_total_mean_1/norm_total_mean_2.
+--chi2LR1: Chi-square statistic for hypothesis testing of H0.
+--pvalue_LR2: P value of hypothesis testing of H20 (Used to determine the type of a DE gene).
+--pvalue_LR3: P value of hypothesis testing of H30 (Used to determine the type of a DE gene).
+--FDR_LR2: Adjusted P value of pvalue_LR2 using Benjamini & Hochberg’s method (Used to determine the type of a DE gene).
+--FDR_LR3: Adjusted P value of pvalue_LR3 using Benjamini & Hochberg’s method (Used to determine the type of a DE gene).
+pvalue: P value of hypothesis testing of H0 (Used to determine whether a gene is a DE gene).
+--pvalue.adj.FDR: Adjusted P value of H0’s pvalue using Benjamini & Hochberg’s method (Used to determine whether a gene is a DE gene).
+--Remark: Record of abnormal program information.
+--Type: Types of DE genes. DEs represents differential expression status; DEa represents differential expression abundance; DEg represents general differential expression.
+State: State of DE genes, up represents up-regulated; down represents down-regulated.
+
+```{r}
+library(DEsingle)
+
+DefaultAssay(tils) <- "RNA"
+
+
+tils.mat <- GetAssayData(tils, layer="data")
+tils.mat <- as.matrix(tils.mat)
+
+condition_metadata <- tils@meta.data$condition
+group <- factor(condition_metadata) #in this group, "no TILs" is listed before "TIL with IL2", so gene expression is in terms of "no TILs" group
+ncol(tils.mat) == length(group) #if true, can proceed
+
+# Run DEsingle
+resultsDEGs <- DEsingle(counts = tils.mat, group = group)
+
+# Dividing the DE genes into 3 categories (DEs, DEa, and DEg) at threshold of FDR < 0.05 
+  #DEs= “different expression status” ->  genes that show significant difference in the proportion of real zeros in the two groups, but do not have significant difference in the other cells.
+  #DEa = “differential expression abundance” -> genes that are significantly differentially expressed between the groups without significant difference in the proportion of real zeros.
+  #DEg= “general differential expression”-> genes that have significant difference in both the proportions of real zeros and the expression abundances between the two groups.
+results.classified <- DEtype(results = resultsDEGs, threshold = 0.05) #set threshold so only genes with adjusted p value 
+
+# Extract DE genes at threshold of FDR < 0.05
+results.sig <- results.classified[results.classified$pvalue.adj.FDR < 0.05, ] #filters DEG matrix to only include genes identified as DEGs from their p values
+
+# Extract three types of DE genes separately
+results.DEs <- results.sig[results.sig$Type == "DEs", ]
+results.DEa <- results.sig[results.sig$Type == "DEa", ]
+results.DEg <- results.sig[results.sig$Type == "DEg", ]
+
+results.DEg <- results.DEg[order(results.DEg$State, decreasing = TRUE), ]
+
+write.csv(results.DEg, file = "DEsingleResults.csv", row.names = TRUE)
+```
+
+#InferCNV: requires 3 inputs- counts matrix for genexcell, annotation life, gene-ordering file
+```{r}
+tils <-readRDS("/data/khasrawlab/elo8/newTILs-jan27/tils.annotated")
+tils.counts <- GetAssayData(tils, assay= "RNA", layer="counts")
+
+# save the output table as an R object (faster and more size efficient)
+saveRDS(round(tils.counts, digits=3), "sc.10x.counts.matrix")
+
+# write the output table in txt format
+write.table(round(tils.counts, digits=3), file='sc.10x.counts.matrix', quote=F, sep="\t")                                                                                                        
+#make annotation file for inferCNV
+column.names <- colnames(tils.counts)
+
+# Extract the corresponding subcluster labels from Seurat metadata
+subcluster.labels <- tils@meta.data$subcluster.labels[column.names]
+subcluster.labels <- tils@meta.data[column.names, "subcluster.labels"]
+
+anno.matrix <- cbind(column.names, subcluster.labels)
+
+anno.matrix <- as.data.frame(anno.matrix)
+
+# Now apply the substitution
+anno.matrix$subcluster.labels <- gsub("AC-like", "malignant (subtype 1)", anno.matrix$subcluster.labels)
+anno.matrix$subcluster.labels <- gsub("OPC-like", "malignant (subtype 2)", anno.matrix$subcluster.labels)
+anno.matrix$subcluster.labels <- gsub("NPC-like", "malignant (subtype 3)", anno.matrix$subcluster.labels)
+anno.matrix$subcluster.labels <- gsub("MES-like", "malignant (subtype 4)", anno.matrix$subcluster.labels)
+
+#revert back to matrix
+anno.matrix <- as.matrix(anno.matrix)
+# Remove headers
+write.table(anno.matrix, file = "anno_matrix.txt", quote = FALSE, row.names = FALSE, col.names = FALSE, sep = "\t")
+
+
+#gene ordering file (found on Esembl)
+# Install rtracklayer if not already installed
+install.packages("BiocManager")
+BiocManager::install("rtracklayer")
+
+# Load rtracklayer library
+library(rtracklayer)
+
+# Load your GTF file
+geneorder_file <- "Homo_sapiens.GRCh38.113.gtf.gz"
+
+# Import the GTF file into R
+gtf_data <- import(geneorder_file)
+
+# View the imported data (first few rows)
+head(gtf_data)
+
+# Extract gene name, chromosome, and span (start and end positions)
+gene_info <- data.frame(
+  gene_name = mcols(gtf_data)$gene_name, # Gene name
+  chromosome = as.character(seqnames(gtf_data)), # Chromosome
+  start = start(gtf_data), # Start position
+  end = end(gtf_data) # End position
+)
+
+# View the data
+head(gene_info)
+
+#make sure no genes are NA
+gene_info <- gene_info[!is.na(gene_info$gene_name), ]
+
+# Add 'chr' to the start of each chromosome label
+gene_info$chromosome <- paste0("chr", gene_info$chromosome)
+gene_info <- gene_info[gene_info$gene_name %in% rownames(tils.counts), ]
+gene_info <- gene_info[!duplicated(gene_info$gene_name), ]
+
+
+#Export the data to a tab-delimited file
+write.table(gene_info, file = "gene_ordering_file.txt", sep = "\t", row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+#import infercnv package
+library("devtools")
+devtools::install_github("broadinstitute/infercnv")
+library(infercnv)
+
+# create the infercnv object
+infercnv_obj = CreateInfercnvObject(raw_counts_matrix=tils.counts,
+                                    annotations_file="anno_matrix.txt",
+                                    delim="\t",
+                                    gene_order_file="gene_ordering_file.txt",
+                                    ref_group_names=c("Astrocyte", "Oligodendrocyte", "OPC-like", "TAM-BDM", "TAM-MG", "Endothelial", "Mural cell", "OPC", "Mono", "CD4/CD8", "Neuron"))
+
+```
+
+MAPPING T CELL STATUS
+```{r}
+library(monocle3)
+#UMAP in 3D
+tils <- RunUMAP(tils, dims = 1:30, n.components = 3, reduction = "integrated.cca", reduction.name = "UMAP_3D", random.seed = 42)
+
+# Define gene sets
+activation_genes <- c("CD69", "IL2RA", "CD38", "TNF")
+  #"HLA-DRA" & "IFNG" NOT IN SAMPLES
+  
+differentiation_genes <- c("TCF7", "LEF1", "PRF1")
+  #"GZMB" NOT IN SAMPLES
+exhaustion_genes <- c("PDCD1", "LAG3", "HAVCR2", "CTLA4", "TOX")
+ 
+# Add module scores
+tils <- AddModuleScore(tils, features = list(activation_genes), name = 'Activation_Score')
+tils <- AddModuleScore(tils, features = list(differentiation_genes), name = 'Differentiation_Score')
+tils <- AddModuleScore(tils, features = list(exhaustion_genes), name = 'Exhaustion_Score')
+
+Idents(tils) <- "subcluster.labels"
+tils.tcells <- subset(tils, subset=subcluster.labels == "CD4/CD8")
+#3D Plotting:
+
+library(plotly)
+library(monocle3)
+install.packages("devtools")
+devtools::install_github('cole-trapnell-lab/monocle3')
+ 
+# 3D UMAP T-cell Exhaustion (t cells only)
+plot_ly(
+  x = tils.tcells@reductions$UMAP_3D@cell.embeddings[,1],
+  y = tils.tcells@reductions$UMAP_3D@cell.embeddings[,2],
+  z = tils.tcells@reductions$UMAP_3D@cell.embeddings[,3],
+  color = tils.tcells$Exhaustion_Score1,
+  colors = colorRamp(c("blue", "yellow", "red")),
+  symbol = tils.tcells$condition,
+  symbols = c("circle", "diamond-open"),
+  type = "scatter3d",
+  mode = "markers"
+) %>% layout(title = "3D UMAP of CD8+ T Cells Colored by Exhaustion")
+
+#3D UMAP T-Cell Exhaustion (all cells)
+plot_ly(
+  x = tils@reductions$UMAP_3D@cell.embeddings[,1],
+  y = tils@reductions$UMAP_3D@cell.embeddings[,2],
+  z = tils@reductions$UMAP_3D@cell.embeddings[,3],
+  color = tils$Exhaustion_Score1,
+  colors = colorRamp(c("blue", "yellow", "red")),
+  type = "scatter3d",
+  mode = "markers"
+) %>% layout(title = "3D UMAP of CD8+ T Cells Colored by Exhaustion")
+
+# 3D UMAP T-cell Activation (t cells only)
+plot_ly(
+  x = tils.tcells@reductions$UMAP_3D@cell.embeddings[,1],
+  y = tils.tcells@reductions$UMAP_3D@cell.embeddings[,2],
+  z = tils.tcells@reductions$UMAP_3D@cell.embeddings[,3],
+  color = tils.tcells$Activation_Score1,
+  colors = colorRamp(c("blue", "yellow", "red")),
+  type = "scatter3d",
+  mode = "markers"
+) %>% layout(title = "3D UMAP of CD8+ T Cells Colored by Activation")
+
+
+#3D UMAP T-Cell Activation (all cells)
+plot_ly(
+  x = tils@reductions$UMAP_3D@cell.embeddings[,1],
+  y = tils@reductions$UMAP_3D@cell.embeddings[,2],
+  z = tils@reductions$UMAP_3D@cell.embeddings[,3],
+  color = tils$Activation_Score1,
+  colors = colorRamp(c("blue", "yellow", "red")),
+  type = "scatter3d",
+  mode = "markers"
+) %>% layout(title = "3D UMAP of CD8+ T Cells Colored by Activation")
+
+
+#3D UMAP T-cell Differentiation (t cells only)
+plot_ly(
+  x = tils.tcells@reductions$UMAP_3D@cell.embeddings[,1],
+  y = tils.tcells@reductions$UMAP_3D@cell.embeddings[,2],
+  z = tils.tcells@reductions$UMAP_3D@cell.embeddings[,3],
+  color = tils.tcells$Differentiation_Score1,
+  colors = colorRamp(c("blue", "yellow", "red")),
+  type = "scatter3d",
+  mode = "markers"
+) %>% layout(title = "3D UMAP of CD8+ T Cells Colored by Differentiation")
+
+
+##3D UMAP T-Cell Differentiation (all cells)
+plot_ly(
+  x = tils@reductions$UMAP_3D@cell.embeddings[,1],
+  y = tils@reductions$UMAP_3D@cell.embeddings[,2],
+  z = tils@reductions$UMAP_3D@cell.embeddings[,3],
+  color = tils$Differentiation_Score1,
+  colors = colorRamp(c("blue", "yellow", "red")),
+  type = "scatter3d",
+  mode = "markers"
+) %>% layout(title = "3D UMAP of CD8+ T Cells Colored by Differentiation")
+
+
+##3D UMAP of T Cell Characterization with Activation, Exhaustion & Differentiation as Axes
+#Extract module scores from T-cell subset
+
+tcells.features <- data.frame(
+  Exhaustion = tils.tcells$Exhaustion_Score1,
+  Differentiation = tils.tcells$Differentiation_Score1,
+  Activation = tils.tcells$Activation_Score1,
+  Condition = tils.tcells$condition
+)
+
+#Create a 3D UMAP plot with module scores as axes
+#this has cells colored by exhaustion score
+plot_ly(
+  data = tcells.features,
+  x = ~Exhaustion,
+  y = ~Differentiation,
+  z = ~Activation,
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 3, color = tcells.features$Exhaustion, colorscale = "Viridis")
+) %>% layout(
+  title = "3D UMAP of T Cells: Exhaustion, Differentiation, Activation",
+  scene = list(
+    xaxis = list(title = "Exhaustion Score"),
+    yaxis = list(title = "Differentiation Score"),
+    zaxis = list(title = "Activation Score")
+
+  )
+
+)
+
+#this has cells colored by condition
+condition_colors <- c("TIL+" = "red", "TIL-" = "blue")
+
+tcells.umap <- plot_ly(
+  data = tcells.features,
+  x = ~Exhaustion,
+  y = ~Differentiation,
+  z = ~Activation,
+  type = "scatter3d",
+  mode = "markers",
+  color = ~Condition,
+  colors = condition_colors
+) %>% layout(
+  title = "3D UMAP of T Cells: Exhaustion, Differentiation, Activation",
+  scene = list(
+    xaxis = list(title = "Exhaustion Score"),
+    yaxis = list(title = "Differentiation Score"),
+    zaxis = list(title = "Activation Score")
+    )
+)
+
+library(htmlwidgets)
+
+
+
+saveWidget(tcells.umap, "tcells3dUMAP.html", selfcontained = TRUE)
+
+
+ 
+```
+
+Violin Plots for Cell Composition Variability Visualization--------
+
+```{r}
+Idents(tils) <- "subcluster.labels"
+
+metadata <- tils@meta.data
+
+
+Idents(tils) <- "subcluster.labels"
+tils.immune <- subset(tils, subset=subcluster.labels == "CD4/CD8")
+
+immune.metadata <- tils.immune@meta.data
+
+
+    # Step 1: Calculate proportions of each cell type per sample
+library(dplyr)
+library(ggplot2)
+
+# Get the overall metadata for all cells
+metadata <- tils@meta.data
+
+# Subset the CD4/CD8 cells from your Seurat object
+Idents(tils) <- "subcluster.labels"
+tils.immune <- subset(tils, subset = subcluster.labels == "CD4/CD8")
+immune.metadata <- tils.immune@meta.data
+
+# Calculate the total number of cells per sample from the full dataset
+total_cells_full <- metadata %>%
+  group_by(orig.ident) %>%
+  summarise(total_all = n(), .groups = "drop")
+
+# Calculate the number of CD4/CD8 cells per sample from the subset
+cd4cd8_counts <- immune.metadata %>%
+  group_by(orig.ident) %>%
+  summarise(cd4cd8 = n(), .groups = "drop")
+
+# Merge the two and calculate the proportion of CD4/CD8 cells per sample
+immune_props <- cd4cd8_counts %>%
+  left_join(total_cells_full, by = "orig.ident") %>%
+  mutate(proportion = cd4cd8 / total_all) %>%
+  left_join(metadata %>% select(orig.ident, condition) %>% distinct(), by = "orig.ident")
+
+# Ensure condition is a factor with proper order (TIL+ first, then TIL-)
+immune_props$condition <- factor(immune_props$condition, levels = c("TIL+", "TIL-"))
+
+# Create the plot (using interaction to position the violins)
+immune_prop_plot <- ggplot(immune_props, 
+                           aes(x = interaction("CD4/CD8", Condition, sep = " "), 
+                               y = Proportion, fill = "CD4/CD8")) +
+    geom_violin(trim = FALSE, alpha = 0.6, 
+                position = position_dodge(width = 0.75)) +  
+    geom_jitter(color = "black",  # Set points to black
+                position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), 
+                size = 2, alpha = 0.8) +  
+    scale_fill_manual(name = NULL, values = c("CD4/CD8" = "yellow2"))+  
+    labs(x = "Condition", y = "Proportion", 
+         title = "Immune Cell Proportions by Condition") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold")) +
+    scale_x_discrete(
+        limits = c("CD4/CD8 TIL+", "CD4/CD8 TIL-"),
+        labels = function(x) sub(".* ", "", x)
+    )
+
+# Display the plot
+immune_prop_plot
+
+
+  ggsave("cellCompVPlots2/immuneCells_props_vplot_final.png", immune_prop_plot, width = 5, height = 4, dpi = 600)
+  
+p_immune <- immune_cells %>%
+  ggplot(aes(x = condition, y = proportion_cd4_cd8, fill=condition)) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  geom_jitter(width = 0.2, size = 1, alpha = 0.8) +
+  labs(x = "Condition", y = "Proportion", title = "Immune Cell Proportions by Condition") +
+  theme_minimal() + scale_fill_manual(values = c("TIL+" = "yellow2", "TIL-" = "#FFFF99")) +  
+  theme(legend.position = "none",
+        strip.text = element_text(size = 12, face = "bold"),
+        axis.text.x = element_text(size = 10, face = "bold"),
+        axis.text.y = element_text(size = 10),
+        axis.title = element_text(size = 12, face = "bold"))
+  ggsave("cellCompVPlots/immune_cells_plot.png", p_immune, width = 3.93, height = 2.79, dpi = 600)
+
+ 
+#scale_fill_manual(values = c("TIL+" = "blue", "TIL-" = "red")) # Set violin colors
+#scale_color_manual(values = c("TIL+" = "darkblue", "TIL-" = "darkred")) +  # Set dot colors    
+  
+# Calculate the proportion of each cancer type cells per sample in orig.ident
+cell_props <- metadata %>%
+  group_by(orig.ident) %>%
+  summarise(
+    total_cells = n(),
+    meslike_cells = sum(subcluster.labels == "Tumor (MES-like)"),
+    proportion_meslike = meslike_cells / total_cells,
+    aclike_cells = sum(subcluster.labels == "Tumor (AC-like)"),
+    proportion_aclike = aclike_cells / total_cells,
+    opclike_cells = sum(subcluster.labels == "Tumor (OPC-like)"),
+    proportion_opclike = opclike_cells / total_cells,
+    npclike_cells = sum(subcluster.labels == "Tumor (NPC-like)"),
+    proportion_npclike = npclike_cells / total_cells,
+    cd4_cd8_cells = sum(subcluster.labels == "CD4/CD8"),
+    proportion_cd4_cd8 = cd4_cd8_cells / total_cells,
+    astro_cells = sum(subcluster.labels == "Astrocyte"),
+    proportion_astro = astro_cells / total_cells,
+    oligo_cells = sum(subcluster.labels == "Oligodendrocyte"),
+    proportion_oligo = oligo_cells / total_cells,
+    tamMG_cells = sum(subcluster.labels == "TAM-MG (PI)"),
+    proportion_tamMG = tamMG_cells / total_cells,
+    tamBDM_cells = sum(subcluster.labels == "TAM-BDM (IS/PI)"),
+    proportion_tamBDM = tamBDM_cells / total_cells,
+    endo_cells = sum(subcluster.labels == "Endothelial"),
+    proportion_endo = endo_cells / total_cells,
+    mural_cells = sum(subcluster.labels == "Mural cell"),
+    proportion_mural = mural_cells / total_cells,
+    opc_cells = sum(subcluster.labels == "OPC"),
+    proportion_opc = opc_cells / total_cells,
+    mono_cells = sum(subcluster.labels == "Monocyte"),
+    proportion_mono = mono_cells / total_cells,
+    neuron_cells = sum(subcluster.labels == "Neuron"),  # Fixed from "Astrocyte"
+    proportion_neuron = neuron_cells / total_cells
+  ) %>%
+  left_join(metadata %>% select(orig.ident, condition) %>% distinct(orig.ident, .keep_all = TRUE), by = "orig.ident")
+
+# View the result
+print(cell_props)
+
+# Step 1: Calculate proportions of each cell type per sample
+cell_props_test <- metadata %>%
+  group_by(orig.ident, subcluster.labels) %>%
+  summarise(
+    total_cells = n(),
+    .groups = "drop"  # Avoid warnings related to grouping after summarise
+  ) %>%
+  group_by(orig.ident) %>%
+  mutate(proportion = total_cells / sum(total_cells)) %>%
+  ungroup() %>%
+  left_join(metadata %>% select(orig.ident, condition) %>% distinct(), by = "orig.ident")
+
+# Step 2: Violin plot with proportion of each subcluster, colored by "subcluster.labels"
+
+cell_props_vplot <- cell_props_test %>%
+  ggplot(aes(x = condition, y = proportion, fill = subcluster.labels)) +
+  geom_violin(trim = FALSE, alpha = 0.6) +  # Fill violins by subcluster.labels
+  geom_jitter(width = 0.2, size = 1, alpha = 0.8) +
+  labs(x = "Condition", y = "Proportion", title = "Sample Variability in Tumor Compositions (TIL+ vs TIL-)") +
+  scale_fill_manual(values = annotation.colors) +
+  theme_minimal() + 
+  theme(strip.text = element_text(size = 12, face = "bold"),
+        axis.text.x = element_text(size = 10, face = "bold"),
+        axis.text.y = element_text(size = 10),
+        axis.title = element_text(size = 12, face = "bold"))
+
+# Display the plot
+cell_props_vplot
+
+  ggsave("cellCompVPlots/allCells_prop_vplot.png", cell_props_vplot, width = 10, height = 4, dpi = 600)
+  
+###Tumor Subtypes by themselves
+tumor.colors <- c("Tumor (AC-like)" = "blue", 
+                       "Tumor (OPC-like)" = "aquamarine", 
+                       "Tumor (NPC-like)" = "darkblue", 
+                       "Tumor (MES-like)" = "turquoise3")
+                       
+Idents(tils) <- "subcluster.labels"
+tils.tumor <- subset(tils, subset=subcluster.labels == "Tumor (AC-like)" | 
+subcluster.labels == "Tumor (OPC-like)" | subcluster.labels == "Tumor (NPC-like)" | subcluster.labels == "Tumor (MES-like)")
+
+tumor.metadata <- tils.tumor@meta.data
+
+
+    # Step 1: Calculate proportions of each cell type per sample
+tumor_props <- tumor.metadata %>%
+  group_by(orig.ident, subcluster.labels) %>%
+  summarise(
+    total_cells = n(),
+    .groups = "drop"  # Avoid warnings related to grouping after summarise
+  ) %>%
+  group_by(orig.ident) %>%
+  mutate(proportion = total_cells / sum(total_cells)) %>%
+  ungroup() %>%
+  left_join(metadata %>% select(orig.ident, condition) %>% distinct(), by = "orig.ident")
+geom_point(aes(x = condition), 
+           position = position_dodge(width = 0.5), 
+           size = 2, alpha = 0.8, color = "black")
+
+# Step 2: Violin plot with proportion of each subcluster, colored by "subcluster.labels"
+# Ensure condition is a factor in the correct order
+tumor_props$condition <- factor(tumor_props$condition, levels = c("TIL+", "TIL-"))
+
+# Plot with manual ordering on x-axis
+tumor_props_plot <- ggplot(tumor_props, aes(x = interaction(subcluster.labels, condition, sep = " "), 
+                                                y = proportion, fill = subcluster.labels)) +
+    geom_violin(trim = FALSE, alpha = 0.6, 
+                position = position_dodge(width = 0.75)) +  
+    geom_jitter(color = "black",  # Set points to black
+                position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), 
+                size = 2, alpha = 0.8) +  
+    scale_fill_manual(name = NULL, values = tumor.colors) +  # Use subcluster.labels colors for violins
+    labs(x = "Condition", y = "Proportion", 
+         title = "Tumor Subtype Cell Proportions by Condition") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold")) +
+    scale_x_discrete(
+        # Specify the desired order of the combined factor levels:
+        limits = c("Tumor (AC-like) TIL+", "Tumor (AC-like) TIL-", "Tumor (MES-like) TIL+", "Tumor (MES-like) TIL-", "Tumor (NPC-like) TIL+", "Tumor (NPC-like) TIL-","Tumor (OPC-like) TIL+", "Tumor (OPC-like) TIL-"),
+        labels = function(x) sub(".* ", "", x)
+    )
+tumor_props_plot
+
+  ggsave("cellCompVPlots2/tumor_props_vplot_final.png", tumor_props_plot, width = 8, height = 4, dpi = 600)
+
+saveRDS(tils, "/data/khasrawlab/elo8/newTILs-jan27/tils.saved.feb12")
+
+#TAM Violin Plots
+tam.colors <- c("TAM-BDM (IS/PI)" = "violet",
+              "TAM-MG (PI)" = "lightpink",
+              "Monocyte" = "deeppink1")
+                       
+Idents(tils) <- "subcluster.labels"
+tils.tams <- subset(tils, subset=subcluster.labels == "TAM-BDM (IS/PI)" | 
+subcluster.labels == "TAM-MG (PI)"|
+subcluster.labels == "Monocyte")
+
+tams.metadata <- tils.tams@meta.data
+
+    # Step 1: Calculate proportions of each cell type per sample
+tams_props <- tams.metadata %>%
+  group_by(orig.ident, subcluster.labels) %>%
+  summarise(
+    total_cells = n(),
+    .groups = "drop"  # Avoid warnings related to grouping after summarise
+  ) %>%
+  group_by(orig.ident) %>%
+  mutate(proportion = total_cells / sum(total_cells)) %>%
+  ungroup() %>%
+  left_join(metadata %>% select(orig.ident, condition) %>% distinct(), by = "orig.ident")
+
+ #Step 2: Violin plot with proportion of each subcluster, colored by "subcluster.labels"
+# Ensure condition is a factor in the correct order
+tams_props$condition <- factor(tams_props$condition, levels = c("TIL+", "TIL-"))
+
+tams_props$subcluster.labels <- factor(tams_props$subcluster.labels, levels = c("TAM-BDM (IS/PI)", "TAM-MG (PI)", "Monocyte"))
+
+# Plot with manual ordering on x-axis
+tam_props_plot <- ggplot(tams_props, aes(x = interaction(subcluster.labels, condition, sep = " "), 
+                                                y = proportion, fill = subcluster.labels)) +
+    geom_violin(trim = FALSE, alpha = 0.6, 
+                position = position_dodge(width = 0.75)) +  
+    geom_jitter(color = "black",  # Set points to black
+                position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), 
+                size = 2, alpha = 0.8) +  
+    scale_fill_manual(name = NULL, values = tam.colors) +  # Use subcluster.labels colors for violins
+    labs(x = "Condition", y = "Proportion", 
+         title = "Myeloid Cell Proportions by Condition") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold")) +
+    scale_x_discrete(
+        # Specify the desired order of the combined factor levels:
+        limits = c("TAM-BDM (IS/PI) TIL+", "TAM-BDM (IS/PI) TIL-", "TAM-MG (PI) TIL+", "TAM-MG (PI) TIL-", "Monocyte TIL+", "Monocyte TIL-"),
+        labels = function(x) sub(".* ", "", x)
+    )
+tam_props_plot
+
+  ggsave("cellCompVPlots2/myeloid_props_vplot_final.png", tam_props_plot, width = 8, height = 4, dpi = 600)
+  
+# Vascular Cell Type Violin Plots (Mural & Endothelial)
+stromal.colors <- c("Endothelial"="red",
+                       "Mural cell"="orange2")
+                       
+Idents(tils) <- "subcluster.labels"
+tils.stromal <- subset(tils, subset=subcluster.labels == "Endothelial" | 
+subcluster.labels == "Mural cell")
+
+stromal.metadata <- tils.stromal@meta.data
+
+    # Step 1: Calculate proportions of each cell type per sample
+stromal_props <- stromal.metadata %>%
+  group_by(orig.ident, subcluster.labels) %>%
+  summarise(
+    total_cells = n(),
+    .groups = "drop"  # Avoid warnings related to grouping after summarise
+  ) %>%
+  group_by(orig.ident) %>%
+  mutate(proportion = total_cells / sum(total_cells)) %>%
+  ungroup() %>%
+  left_join(metadata %>% select(orig.ident, condition) %>% distinct(), by = "orig.ident")
+  
+stromal_props$subcluster.labels <- factor(stromal_props$subcluster.labels, 
+                                          levels = c("Endothelial", "Mural cell"))
+
+
+#Step 3
+# Ensure condition is a factor in the correct order
+stromal_props$condition <- factor(stromal_props$condition, levels = c("TIL+", "TIL-"))
+
+# Plot with manual ordering on x-axis
+stromal_props_plot <- ggplot(stromal_props, aes(x = interaction(subcluster.labels, condition, sep = " "), 
+                                                y = proportion, fill = subcluster.labels)) +
+    geom_violin(trim = FALSE, alpha = 0.6, 
+                position = position_dodge(width = 0.75)) +  
+    geom_jitter(color = "black",  # Set points to black
+                position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), 
+                size = 2, alpha = 0.8) +  
+    scale_fill_manual(name = NULL, values = stromal.colors) +  # Use subcluster.labels colors for violins
+    labs(x = "Condition", y = "Proportion", 
+         title = "Vascular Cell Proportions by Condition") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold")) +
+    scale_x_discrete(
+        # Specify the desired order of the combined factor levels:
+        limits = c("Endothelial TIL+", "Endothelial TIL-", "Mural cell TIL+", "Mural cell TIL-"),
+        labels = function(x) sub(".* ", "", x)
+    )
+
+# Display the plot
+
+stromal_props_plot
+
+   ggsave("cellCompVPlots2/vascular_props_plot_final.png", stromal_props_plot, width = 6, height = 4, dpi = 600)
+  
+
+  
+#glial/neuronal (rest of cells left)
+etc.colors <- c("Astrocyte"="royalblue1",
+"Oligodendrocyte" = "forestgreen",
+"OPC" = "darkseagreen3",
+"Neuron" = "purple3")
+
+Idents(tils) <- "subcluster.labels"
+tils.etc <- subset(tils, subset=subcluster.labels == "Astrocyte" | 
+subcluster.labels == "Oligodendrocyte"| 
+subcluster.labels == "OPC"| 
+subcluster.labels == "Neuron")
+
+etc.metadata <- tils.etc@meta.data
+
+    # Step 1: Calculate proportions of each cell type per sample
+etc_props <- etc.metadata %>%
+  group_by(orig.ident, subcluster.labels) %>%
+  summarise(
+    total_cells = n(),
+    .groups = "drop"  # Avoid warnings related to grouping after summarise
+  ) %>%
+  group_by(orig.ident) %>%
+  mutate(proportion = total_cells / sum(total_cells)) %>%
+  ungroup() %>%
+  left_join(metadata %>% select(orig.ident, condition) %>% distinct(), by = "orig.ident")
+  
+etc_props$subcluster.labels <- factor(etc_props$subcluster.labels, levels = c("Neuron", "Oligodendrocyte", "OPC", "Astrocyte"))
+
+# Step 2: Violin plot with proportion of each subcluster, colored by "subcluster.labels"
+etc_props_plot <- ggplot(etc_props, aes(x = interaction(subcluster.labels, condition, sep = " "), 
+                                                y = proportion, fill = subcluster.labels)) +
+    geom_violin(trim = FALSE, alpha = 0.6, 
+                position = position_dodge(width = 0.75)) +  
+    geom_jitter(color = "black",  # Set points to black
+                position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.75), 
+                size = 2, alpha = 0.8) +  
+    scale_fill_manual(name = NULL, values = etc.colors) +  # Use subcluster.labels colors for violins
+    labs(x = "Condition", y = "Proportion", 
+         title = "Glial/Neuronal Cell Proportions by Condition") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold")) +
+    scale_x_discrete(
+        # Specify the desired order of the combined factor levels:
+        limits = c("Neuron TIL+", "Neuron TIL-", "Oligodendrocyte TIL+", "Oligodendrocyte TIL-", "OPC TIL+", "OPC TIL-", "Astrocyte TIL+", "Astrocyte TIL-"),
+        labels = function(x) sub(".* ", "", x)
+    )
+etc_props_plot
+# Display the plot
+   ggsave("cellCompVPlots2/glial_neuronal_props_plot_final.png", etc_props_plot, width = 9, height = 5, dpi = 600)
+
+ 
+```
+
+#Imputation with SAVER
+https://mohuangx.github.io/SAVER/articles/saver-tutorial.html
+
+```{r}
+library(SAVER)
+
+tils.imp.counts <- GetAssayData(tils, assay="RNA", layer = "data")
+rownames(tils.imp.counts) #genes
+colnames(tils.imp.counts) #cells
+
+# run SAVER on til1 matrix
+tils.saver <- saver(tils.imp.counts, ncores = 40)
+
+
+# Convert SAVER estimates to a matrix and store it
+saver.matrix. <- as.matrix(tils.saver$estimate)
+
+# Create a new assay in Seurat to store SAVER results
+tils[["SAVER"]] <- CreateAssay5Object(counts = saver.matrix.)
+
+DefaultAssay(tils) <- "SAVER"
+
+#Seurat integration/batch correction pipeline
+tils <- NormalizeData(tils)
+tils <- FindVariableFeatures(tils, selection.method = "vst", nfeatures = 5000)
+tils.genes <- rownames(tils)
+tils <- ScaleData(tils, features = tils.genes)
+tils <-RunPCA(tils, features = VariableFeatures(object = tils), set.seed(42))
+
+#run Seurat's FindNeighbors function
+DefaultAssay(tils) <- "SAVER"
+tils <- FindNeighbors(tils, dims=1:30, reduction = "pca")
+
+#Use Clustree to determine resolution of unintegrated clusters
+tils <- FindClusters(tils, resolution = 0.1, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.2, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.4, random.seed = 42)  
+tils <- FindClusters(tils, resolution = 0.6, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.8, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.0, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.2, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.4, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.6, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.8, random.seed = 42)
+
+tils <- FindClusters(tils, resolution = 2.0, cluster.name = "unintegrated_clusters_saver", random.seed = 42)
+clustree(tils)
+
+#Run UMAP & plot it
+DefaultAssay(tils) <- "SAVER"
+tils <- RunUMAP(tils, dims=1:30, reduction="pca", seed.use = 42, reduction.name = "umap.unintegrated.saver") 
+DimPlot(tils, reduction = "umap.unintegrated.saver", group.by = c("unintegrated_clusters_saver"))
+
+
+saveRDS(tils, "/data/khasrawlab/elo8/newTILs-jan27/tils.noBC")
+
+
+DefaultAssay(tils) <- "SAVER"
+tils[["SAVER"]] <- split(tils[["SAVER"]], f = tils$orig.ident)
+
+
+#perform integration / batch correction
+DefaultAssay(tils) <- "SAVER"
+tils <- IntegrateLayers(object = tils, method = CCAIntegration, orig.reduction = "pca", assay = "SAVER", new.reduction = "integrated.cca.saver", verbose = FALSE)
+
+# re-join layers after integration
+tils[["SAVER"]] <- JoinLayers(tils[["SAVER"]])
+
+
+#Run Seurat's Find Neighbors
+DefaultAssay(tils) <- "SAVER"
+tils <- FindNeighbors(tils, reduction = "integrated.cca", dims = 1:30)
+
+#Use Clustree to Determine Resolution
+tils <- FindClusters(tils, resolution = 0.1, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.2, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.4, random.seed = 42)
+tils <- FindClusters(tils, resolution = 0.6, random.seed = 42) 
+tils <- FindClusters(tils, resolution = 0.8, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.0, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.2, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.4, random.seed = 42)
+tils <- FindClusters(tils, resolution = 1.6, random.seed = 42, cluster.name = "integrated_clusters_20_saver")
+tils <- FindClusters(tils, resolution = 1.8, random.seed = 42)
+tils <- FindClusters(tils, resolution = 2.0, random.seed = 42)
+
+clustree(tils)
+
+#Run UMAP
+tils <- RunUMAP(tils, dims = 1:30, reduction = "integrated.cca", reduction.name = "umap.integrated.saver", random.seed = 42)
+DimPlot(tils, reduction = "umap.integrated.saver", group.by = c("integrated_clusters_20_saver"))
+
+
+saveRDS(tils, "/data/khasrawlab/elo8/newTILs-jan27/tils.annotated.level4.saver")
+
+tils.matrix <- GetAssayData(tils, assay="SAVER", layer = "data")
+gbm.ref.sparse <- readRDS("/data/khasrawlab/elo8/final-tils/gbm.ref.sparse")
+gbm.ref.anno3 <- readRDS("/data/khasrawlab/elo8/final-tils/gbm.ref.anno3")
+gbm.ref.anno4 <- readRDS("/data/khasrawlab/elo8/final-tils/gbm.ref.anno4")
+#gbm.ref.anno2 <- readRDS("/data/khasrawlab/elo8/final-tils/gbm.celltypes.anno2")
+
+tils.clusters <- tils$integrated_clusters_20_saver
+
+pred.tils.labels.clusters.saver.anno3 <- SingleR(test = tils.matrix, 
+                         ref = gbm.ref.sparse,   
+                         labels = gbm.ref.anno3, 
+                         fine.tune = TRUE, 
+                         num.threads = 40,
+                         de.method = "wilcox",
+                         clusters= tils.clusters)
+
+saveRDS(pred.tils.labels.clusters.saver.anno3, "/data/khasrawlab/elo8/newTILs-jan27/pred.tils.clusters.labels.saver.anno3")
+
+
+#add cluster labels back to seurat clusters
+DefaultAssay(tils) <- "SAVER"
+Idents(tils) <- "integrated_clusters_20_saver"
+cluster_label_map <- setNames(pred.tils.labels.clusters.saver.anno3$labels, rownames(pred.tils.labels.clusters.saver.anno3))
+tils@meta.data$saver.cluster.labels <- cluster_label_map[as.character(Idents(tils))]
+
+DefaultAssay(tils) <- "SAVER"
+Idents(tils) <- "integrated_clusters_20_saver"
+cluster_label_map <- setNames(pred.tils.labels.clusters.saver.anno3$pruned.labels, rownames(pred.tils.labels.clusters.saver.anno3))
+tils@meta.data$saver.cluster.pruned.labels <- cluster_label_map[as.character(Idents(tils))]
+
+
+annotation.colors <- c("Astrocyte"="royalblue1", 
+                       "Endothelial"="red",
+                       "Mural cell" = "orange2",
+                       "CD4/CD8"="yellow3",
+                       "Tumor (AC-like)"="blue",
+                       "Tumor (OPC-like)"="aquamarine",
+                       "Tumor (NPC-like)"="darkblue",
+                       "Tumor (MES-like)" = "turquoise4",
+                       "TAM-BDM (IS/PI)" = "violet",
+                       "TAM-MG (PI)" = "lightpink",
+                       "Monocyte" = "deeppink1",
+                       "Mast" = "slateblue2",
+                       "Oligodendrocyte" = "forestgreen",
+                       "OPC" = "darkseagreen3",
+                       "Neuron" = "purple3")
+                       
+ annotation.colors <- c("Astrocyte"="royalblue1", 
+                       "Endothelial"="red",
+                       "Mural cell" = "orange2",
+                       "CD4/CD8"="yellow2",
+                       "AC-like"="blue",
+                       "OPC-like"="aquamarine",
+                       "NPC-like"="darkblue",
+                       "MES-like" = "turquoise3",
+                       "TAM-BDM" = "violet",
+                       "TAM-MG" = "lightpink",
+                       "Mono" = "deeppink1",
+                       "Mast" = "slateblue2",
+                       "Oligodendrocyte" = "forestgreen",
+                       "OPC" = "darkseagreen3",
+                       "Neuron" = "purple3")
+
+
+DimPlot(tils, reduction = "umap.integrated.saver", group.by= "saver.cluster.labels") + scale_color_manual(values =annotation.colors) 
+
+DimPlot(tils, reduction = "umap.integrated.saver", group.by= "saver.cluster.pruned.labels") + scale_color_manual(values =annotation.colors) 
+
+#just by cells
+
+pred.tils.labels.cells.saver.anno3 <- SingleR(test = tils.matrix, 
+                         ref = gbm.ref.sparse,   
+                         labels = gbm.ref.anno3, 
+                         fine.tune = TRUE, 
+                         num.threads = 40,
+                         de.method = "wilcox")
+
+saveRDS(pred.tils.labels.clusters.saver.anno3, "/data/khasrawlab/elo8/newTILs-jan27/pred.tils.cells.labels.saver.anno3")
+tils$cells.saver.labels <- pred.tils.labels.clusters.saver.anno3$labels
+
+DimPlot(tils, reduction = "umap.integrated.saver", group.by= "cells.saver.labels") + scale_color_manual(values =annotation.colors) 
+
+```
+
