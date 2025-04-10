@@ -1,0 +1,394 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+set.seed(100)
+data_dir <- "path where files are stored"
+output_dir <- "path to save"
+
+full_names <- c(#insert full names)
+sample_names <- c("23-0153", "23-0227", "23-0257", "22-0189", 
+                   "22-0160","23-0021", "23-0258", "23-0264")
+
+# identify TILs vs noTILs
+TILs <- c("22-0189", "23-0153", "23-0227", "23-0257")
+noTILs <- c("22-0160", "23-0021", "23-0258", "23-0264")
+
+# Specify the desired order for plotting (TILs then noTILs)
+desired_order <- c("22-0189", "23-0153", "23-0227", "23-0257", "22-0160", "23-0021", "23-0258", "23-0264")  
+
+# Get all CSV files in the folder
+csv_files <- list.files(data_dir, pattern = "\\.csv$", full.names = TRUE)
+# Initialize list to store SpatialExperiment objects
+spe_list <- list()
+for (file in csv_files) {
+  # Extract sample ID from filename (removes path and .csv extension)
+  sample_id <- sub("_xenium\\.csv$", "", basename(file))
+  # Read the CSV file
+  data <- read.csv(file, row.names = 1, check.names = FALSE)
+  # Filter cells with more than 5 genes and more than 10 total counts
+  gene_filter <- rowSums(data[, !colnames(data) %in% c("sdimx", "sdimy")] > 0) > 5
+  count_filter <- rowSums(data[, !colnames(data) %in% c("sdimx", "sdimy")]) > 10
+  filtered_data <- data[gene_filter & count_filter, ]
+  # Extract spatial coordinates and convert to matrix
+  spatial_coords <- as.matrix(filtered_data[, c("sdimx", "sdimy")])
+  # Extract count matrix (all columns except spatial coordinates) and transpose it
+  counts <- t(as.matrix(filtered_data[, !colnames(filtered_data) %in% c("sdimx", "sdimy")]))
+  # Save cell_ids 
+  cell_ids <- rownames(filtered_data)
+  # Create colData DataFrame
+  col_data <- DataFrame(cell_id = cell_ids, sample_id = sample_id)
+  rownames(col_data) <- cell_ids
+  # Create SpatialExperiment object with counts and coords
+  spe <- SpatialExperiment(
+    assays = list(counts = counts),
+    spatialCoords = spatial_coords,
+    colData = col_data
+  )
+  # Save processed SpatialExperiment object to the list
+  spe_list[[sample_id]] <- spe
+}
+# Order list by sample names
+spe_list <- spe_list[order(names(spe_list))]
+
+for (name in names(spe_list)) {
+  spe <- spe_list[[name]]
+  colData(spe)$orig.ident <- name  # Add the list name as orig.ident
+  spe_list[[name]] <- spe
+}
+```
+
+```{r}
+#| label: banksy-pipeline
+# Merge the SpatialExperiment objects
+spe_joint <- do.call(cbind, spe_list)
+lambda <- 0.2
+use_agf <- FALSE
+spe_joint <- computeLibraryFactors(spe_joint)
+aname <- "banksycounts"
+assay(spe_joint, aname) <- normalizeCounts(spe_joint, log = FALSE)
+# compute banksy matrix- spatially informed
+spe_joint <- computeBanksy(spe_joint, assay_name = aname, k_geom = 30, compute_agf = FALSE)
+spe_joint <- runBanksyPCA(spe_joint, use_agf = use_agf, lambda = lambda, group = "sample_id", seed = 1000)
+# Run UMAP on the BANKSY embedding
+spe_joint <- runBanksyUMAP(spe_joint, use_agf = use_agf, lambda = lambda, seed = 1000)
+# Cluster samples
+res <- 1.0 #higher res = more clusters, use 0.2 for broad clusters
+spe_joint <- clusterBanksy(spe_joint, use_agf = use_agf, lambda = lambda, resolution = res, seed = 1000)
+cnm <- sprintf("clust_M%s_lam%s_k50_res%s", as.numeric(use_agf), lambda, res)
+rdnames <- reducedDimNames(spe_joint)
+# extract matrices for furture analysis
+counts_matrix <- spe_joint@assays@data$counts
+bankcounts_matrix <- spe_joint@assays@data$banksycounts
+all.equal(counts_matrix, bankcounts_matrix) # should NOT be TRUE
+# Extract sample IDs and cell IDs
+sample_ids <- spe_joint@colData$orig.ident
+cell_ids <- rownames(spe_joint@int_colData$spatialCoords)
+# Create a unique cell ID by combining sample_id and an ascending index within each sample
+new_cell_ids <- unlist(lapply(unique(sample_ids), function(sample) {
+  # Get indices for the current sample
+  sample_indices <- which(sample_ids == sample)
+  
+  # Generate new unique cell IDs for this sample
+  paste0(sample, "_cell", seq_along(sample_indices))
+}))
+
+# Add the new cell IDs to the colData as a new column
+spe_joint@colData$new_cell_id <- new_cell_ids
+colnames(counts_matrix) <- spe_joint@colData$new_cell_id
+colnames(bankcounts_matrix) <- spe_joint@colData$new_cell_id
+```
+
+```{r}
+#| label: check-batch-effect
+TIL8_Seurat <- CreateSeuratObject(counts_matrix)
+TIL8 <- NormalizeData(TIL8_Seurat, normalization.method = "LogNormalize", scale.factor = 10000)
+TIL8 <- FindVariableFeatures(TIL8, selection.method = "vst", nfeatures = 2000)
+all.genes <- rownames(TIL8)
+TIL8 <- ScaleData(TIL8, features = all.genes)
+TIL8 <- RunPCA(TIL8, features = VariableFeatures(object = TIL8))
+ElbowPlot(TIL8) # select dims where it tapers off flat
+TIL8 <- FindNeighbors(TIL8, dims = 1:9)
+## Run clustree pipeline from clustree code chunk to get best resolution
+TIL8 <- FindClusters(TIL8, resolution = 0.2)
+TIL8 <- RunUMAP(TIL8, dims = 1:9, reduction.name = "umap.unintegrated")
+DimPlot(TIL8, reduction = "umap.unintegrated", group.by = "orig.ident")
+```
+
+```{r}
+#| label: harmony-integration
+# remove batch effect
+TIL8[["RNA"]] <- split(TIL8[["RNA"]], f = TIL8$orig.ident)
+TIL8 <- NormalizeData(TIL8)
+TIL8 <- FindVariableFeatures(TIL8)
+TIL8 <- ScaleData(TIL8)
+TIL8 <- RunPCA(TIL8)
+TIL8 <- IntegrateLayers(object = TIL8, method = HarmonyIntegration, orig.reduction = "pca",
+  new.reduction = 'harmony', verbose = FALSE)
+TIL8 <- JoinLayers(TIL8)
+TIL8 <- FindNeighbors(TIL8, reduction = "harmony", dims = 1:9)
+TIL8 <- FindClusters(TIL8, resolution = 0.2, cluster.name = "harm_clusters")
+TIL8 <- RunUMAP(TIL8, dims = 1:9, reduction.name = "umap.integrated")
+DimPlot(TIL8, reduction = "umap.integrated", group.by = "orig.ident")
+```
+
+```{r}
+#| label: Find-Markers-Harmony
+all_markers <- FindAllMarkers(
+  object = TIL8_harmony,
+  only.pos = TRUE,        # Only return markers with positive log fold change
+  min.pct = 0.10,         # Minimum percentage of cells expressing the gene
+  logfc.threshold = 0.25  # Minimum log fold change
+)
+write.csv(all_markers, file = "all_markers_harmony.csv")
+# annotate clusters based on differential gene expression in these results
+```
+
+```{r}
+#| label: UMAP-original-annotations
+clusters <- TIL8@meta.data$harm_clusters
+annotations <- data.frame(
+  cluster =  0:8, # change based on # of clusters (depends on clustering resolution)
+  annotation = c("insert cluster names"))
+# Merge annotations with cluster data
+cluster_annotations <- data.frame(cluster = as.integer(as.character(clusters)))
+cluster_annotations <- left_join(cluster_annotations, annotations, by = "cluster")
+TIL8@meta.data$ClusterAnnotation <- cluster_annotations$annotation
+
+colors = c(
+# optional, set colors for each annotation
+)
+
+DimPlot(
+  TIL8, 
+  reduction = "umap.integrated",
+  group.by = "ClusterAnnotation") +
+  ggtitle("TIL and noTIL UMAP") +
+  scale_color_manual(values = colors)
+```
+
+```{r}
+#| label: DGE-edgeR
+
+# set regions (TIL vs noTIL)
+colData(spe_joint_clustered)$region <- ifelse(colData(spe_joint_clustered)$orig.ident 
+                                              %in% c("22-0189", "23-0153", "23-0227", "23-0257"), "TIL", "NoTIL")
+count_matrix <- assay(spe_joint_clustered, "counts")
+# Create DGEList object from the subset counts and group labels
+group <- colData(spe_joint_clustered)$region
+
+y <- DGEList(counts = count_matrix, group = group)
+
+y <- y[rowSums(y$counts) > 0, ]
+
+# Check for samples with zero total counts (AFTER filtering)
+zero_lib_sizes <- colSums(y$counts) == 0
+if (any(zero_lib_sizes)) {
+  cat("Samples with zero total counts detected. These samples will be removed:\n")
+  print(colnames(y)[zero_lib_sizes])  # Print the sample names with zero total counts
+  y <- y[, colSums(y$counts) > 0]  # Keep only samples with non-zero counts
+}
+
+# Print library sizes to check if there are any abnormally small libraries
+cat("Library sizes:\n")
+print(colSums(y$counts))
+
+# Check for samples with zero total counts after filtering
+if (any(colSums(y$counts) == 0)) {
+  cat("Some samples still have zero counts after filtering. These will be removed.\n")
+  y <- y[, colSums(y$counts) > 0]
+}
+
+# Normalize for library sizes using TMM normalization
+y <- calcNormFactors(y)
+
+# Estimate dispersion based on the group design
+design <- model.matrix(~ group)
+y <- estimateDisp(y, design)
+
+# GLM-based differential expression analysis (robust with zero counts)
+fit <- glmFit(y, design)
+lrt <- glmLRT(fit)
+
+# Extract results
+res <- topTags(lrt, n = Inf)$table
+
+# View top differentially expressed genes
+head(res)
+
+# Extract significant genes (FDR < 0.05)
+res_sig <- res[res$FDR < 0.05, ]
+
+# Order by p-value
+res_ordered <- res[order(res$PValue), ]
+res_FC <- res_ordered 
+
+# Convert row names to a proper column called 'res_FC'
+res_FC <- data.frame(Gene = rownames(res_FC), res_FC, row.names = NULL)
+
+#Export
+write_xlsx(res_FC, paste0(output_dir, "/DGE-TIL8.xlsx"))
+```
+
+```{r}
+#| label:cells-stat-sig
+## For individual cell annotations
+# Filter metadata for all cell types
+cell_metadata <- TIL8@meta.data[, c("orig.ident", "ClusterAnnotation", "Type")]
+
+# Count the number of each cell type per sample
+cell_counts <- cell_metadata |>
+  group_by(orig.ident, Type, ClusterAnnotation) |>
+  summarise(Count = n(), .groups = "drop")
+
+# Get total cells per sample
+total_cells_per_sample <- cell_metadata |>
+  group_by(orig.ident, Type) |>
+  summarise(Total_Cells = n(), .groups = "drop")
+
+# Merge total counts into cell_counts
+cell_counts <- cell_counts |>
+  left_join(total_cells_per_sample, by = c("orig.ident", "Type"))
+
+# Calculate proportions PER SAMPLE
+cell_counts_prop <- cell_counts |>
+  mutate(Proportion = Count / Total_Cells) |>
+  select(orig.ident, Type, ClusterAnnotation, Proportion)
+
+# Pivot wider
+cell_wide <- cell_counts_prop |>
+  pivot_wider(names_from = ClusterAnnotation, values_from = Proportion, values_fill = 0)
+
+# Split into TIL and no TIL groups
+cell_TIL <- cell_wide |> filter(Type == "TIL")
+cell_no_TIL <- cell_wide |> filter(Type == "no TIL")
+
+# Extract numeric matrices
+cell_TIL_numeric <- cell_TIL |> select(-orig.ident, -Type)
+cell_no_TIL_numeric <- cell_no_TIL |> select(-orig.ident, -Type)
+
+# Initialize empty lists to store results
+shapiro_TIL_results <- list()
+shapiro_noTIL_results <- list()
+wilcox_results <- list()
+t_test_results <- list()
+# Loop over each tumor subtype column
+for (cell_type in colnames(cell_TIL_numeric)) {
+  
+  # Extract values for the current tumor subtype
+  TIL_values <- cell_TIL_numeric[[cell_type]]
+  noTIL_values <- cell_no_TIL_numeric[[cell_type]]
+  
+  # Perform Shapiro-Wilk test for normality
+  shapiro_TIL_results[[cell_type]] <- shapiro.test(TIL_values)
+  shapiro_noTIL_results[[cell_type]] <- shapiro.test(noTIL_values)
+  
+  if (shapiro_TIL_results[[cell_type]]$p.value < 0.05 & shapiro_noTIL_results[[cell_type]]$p.value < 0.05) {
+    t_test_results[[cell_type]] <- t.test(TIL_values, noTIL_values, var.equal = TRUE)
+  }
+  
+  # Perform Wilcoxon test
+  wilcox_results[[cell_type]] <- wilcox.test(TIL_values, noTIL_values, exact = FALSE)
+}
+
+# Print results
+shapiro_TIL_results
+shapiro_noTIL_results
+wilcox_results
+t_test_results
+```
+
+```{r}
+#| label: proportions-bar-graph
+final_filtered <- cell_counts_prop |>
+  filter(!ClusterAnnotation %in% c("TAM (Combined)", "Tumor (Combined)"))
+
+avg_proportions <- final_filtered|>
+  group_by(Type, ClusterAnnotation)|>
+  summarise(Average_Proportion = mean(Proportion), .groups = "drop") |>
+  mutate(Type = if_else(Type == "TIL", "TIL +", "TIL -"),
+         Type = factor(Type, levels = c("TIL +", "TIL -")))
+
+p <- avg_proportions |>
+  ggplot(aes(x = Type, y = Average_Proportion, fill = ClusterAnnotation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(x = "Condition", y = "Proportion", title = element_blank(), fill = "Cell Type") +
+  #scale_fill_manual(values = colors) +
+  theme_minimal() +
+  theme(legend.text = element_text(size = 10, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"))
+
+p
+ggsave("avg_proportions_plot.png", plot = p, width = 6, height = 4, dpi = 300)
+```
+
+```{r}
+#| label: violin-plots
+cell_counts <- cell_counts|>
+  mutate(Proportion = Count / Total_Cells) |>
+  mutate(Type = if_else(Type == "TIL", "TIL +", "TIL -"),
+         Type = factor(Type, levels = c("TIL +", "TIL -")))
+# go through and make plot for each group that you want, changing annotation labels
+selected_cells <- cell_counts|>
+  filter(ClusterAnnotation %in% c(# pick annotations))
+
+p_immune <- selected_cells|>
+  ggplot(aes(x = Type, y = Proportion, fill = ClusterAnnotation)) +
+  geom_violin(trim = FALSE, alpha = 0.6) +
+  facet_wrap(~ClusterAnnotation, ncol = 3) + # change based on # of annotations selected
+  labs(x = "Condition", y = "Proportion", title = element_blank()) +
+  scale_fill_manual(values = colors) +
+  theme_minimal() +
+  theme(legend.position = "none",
+        strip.text = element_text(size = 12, face = "bold"),
+        axis.text.x = element_text(size = 10, face = "bold"),
+        axis.text.y = element_text(size = 10),
+        axis.title = element_text(size = 12, face = "bold"))
+p_immune
+ggsave("violin_plot_celltype.pdf", p_immune, width = 8, height = 6, dpi = 300)
+
+```
+
+
+```{r}
+#| label: clustree
+
+## optional to determine best clustering resolution 
+
+library(clustree)
+sampled_cells <- sample(colnames(TIL8), 1000)
+TIL8_sampled <- subset(TIL8, cells = sampled_cells)
+
+# Subset PCA
+pca_subset <- TIL8@reductions$pca
+pca_subset@cell.embeddings <- pca_subset@cell.embeddings[sampled_cells, , drop = FALSE]
+pca_subset@feature.loadings <- pca_subset@feature.loadings
+TIL8_sampled@reductions$pca <- pca_subset
+
+# Ensure order matches
+TIL8_sampled@reductions$pca@cell.embeddings <- 
+    TIL8_sampled@reductions$pca@cell.embeddings[colnames(TIL8_sampled), , drop = FALSE]
+
+
+# Reuse scaling (optional, if your workflow depends on scaled data)
+dimnames(TIL8@assays$RNA@layers$scale.data) <- list(
+  rownames(TIL8@assays$RNA),
+  colnames(TIL8)
+)
+# Subset the scaled data from the layers slot
+TIL8_sampled@assays$RNA@layers$scale.data <- TIL8@assays$RNA@layers$scale.data[, sampled_cells]
+
+
+# Proceed with downstream analysis
+TIL8_sampled <- FindNeighbors(TIL8_sampled, dims = 1:9)
+TIL8_sampled <- FindClusters(TIL8_sampled, resolution = c(0.05, 0.1, 0.2, 0.3, 0.4, 0.5))
+
+# Visualize with Clustree
+clustree(TIL8_sampled, prefix = "RNA_snn_res.")
+
+# choose highest resolution with no crossing over
+```
+
+
