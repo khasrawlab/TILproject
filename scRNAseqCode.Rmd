@@ -41,51 +41,45 @@ library(anndata)
 
 
 ```{r cars}
+# replace "~" with directory folder is saved on local computer
 #sample 23-0227 [BC001]- 
-til1.data <- Read10X(data.dir="/data/khasrawlab/elo8/merged-tils/merged-23-0227/outs/count/filtered_feature_bc_matrix")
+til1.data <- Read10X(data.dir="~/23-0227_feature_bc_matrix")
 til1 <- CreateSeuratObject(til1.data,project="23-0227" )
 til1 #1004 cells
 
-#sample 23-0258 [BC003]-sus
-til3.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0258/outs/count/filtered_feature_bc_matrix/") 
+#sample 23-0258 [BC003]-
+til3.data <- Read10X(data.dir= "~/23-0258_feature_bc_matrix/") 
 til3 <- CreateSeuratObject(counts=til3.data, project= "23-0258")
 til3 #830 cells
 
-
-
-#sample 23-0021[BC005]0-sus
-til5.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0021/outs/count/filtered_feature_bc_matrix/") 
+#sample 23-0021[BC005]-
+til5.data <- Read10X(data.dir= "~/23-0021_feature_bc_matrix/") 
 til5 <- CreateSeuratObject(counts=til5.data, project= "23-0021")
 til5 #712 cells
 
 
 #sample 23-0257 [BC007]
-til7.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0257/outs/count/filtered_feature_bc_matrix/") 
+til7.data <- Read10X(data.dir= "~/23-0257_feature_bc_matrix/") 
 til7 <- CreateSeuratObject(counts=til7.data, project= "23-0257")
 til7 #1429 cells
 
-#sample 23-0264 [BC008]-dud
-til8.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0264/outs/count/filtered_feature_bc_matrix/") 
+#sample 23-0264 [BC008]-
+til8.data <- Read10X(data.dir= "~/23-0264_feature_bc_matrix/") 
 til8 <- CreateSeuratObject(counts=til8.data, project= "23-0264")
 til8 #765 cells
 
 #sample 23-0153 [BC009]
-til9.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0153/outs/count/filtered_feature_bc_matrix/") 
+til9.data <- Read10X(data.dir= "~/23-0153_feature_bc_matrix/") 
 til9 <- CreateSeuratObject(counts=til9.data, project= "23-0153")
 til9 #796 cells
 
-#sample 22-0160 [BC010] -dud
-til10.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-22-0160/outs/count/filtered_feature_bc_matrix/") 
+#sample 22-0160 [BC010]
+til10.data <- Read10X(data.dir= "~/22-0160_feature_bc_matrix/") 
 til10 <- CreateSeuratObject(counts=til10.data, project= "22-0160")
 til10 #539 cells
 
-#sample 23-0217 [BC011] not used anymore
-#til11.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-23-0217/outs/count/filtered_feature_bc_matrix/") 
-#til11 <- CreateSeuratObject(counts=til11.data, project= "23-0217")
-#til11 #627 cells
-
 #sample 22-0189 [BC012]
-til12.data <- Read10X(data.dir= "/data/khasrawlab/elo8/merged-tils/merged-22-0189/outs/count/filtered_feature_bc_matrix/") 
+til12.data <- Read10X(data.dir= "~/22-0189_feature_bc_matrix/") 
 til12 <- CreateSeuratObject(counts=til12.data, project= "22-0189")
 til12 #902 cells
 ```
